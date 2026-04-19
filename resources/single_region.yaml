@@ -1,0 +1,14 @@
+kind: File
+version: v1
+metadata:
+  fileName: file1
+  fileVersion: v1
+spec:
+  components:
+    - type: Lambda
+      name: myLamnda
+      connectsTo:
+        - type: S3
+          name: myS3
+    - type: S3
+      name: myS3

@@ -1,0 +1,35 @@
+kind: Definition
+version: v1
+
+inputs:
+  topology:
+    type: enum
+    values: [single_region, multi_region]
+    default: single_region
+
+  includeDynamoDB:
+    type: boolean
+    default: false
+
+components:
+  - type: ECSCluster
+    name: myECS
+    required: true
+    fileScope: regional
+
+  - type: DynamoDB
+    name: myDynamo
+    includeWhen:
+      input_equals:
+        includeDynamoDB: true
+    fileScopeByTopology:
+      single_region: regional
+      multi_region: global
+
+relationships:
+  - from:
+      type: ECSCluster
+      name: myECS
+    to:
+      type: DynamoDB
+      name: myDynamo

@@ -1,0 +1,10 @@
+
+kind: File
+version: v1
+metadata:
+  fileName: globalFile
+  fileVersion: v1
+spec:
+  components:
+    - type: DynamoDB
+      name: myGlobalDynamo

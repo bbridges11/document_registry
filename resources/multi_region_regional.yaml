@@ -1,0 +1,20 @@
+
+
+kind: File
+version: v1
+metadata:
+  fileName: file2
+  fileVersion: v1
+spec:
+  components:
+    - type: ECSCluster
+      name: myECS
+      connectsTo:
+        - type: DynamoDB
+          name: myGlobalDynamo
+          fileName: globalFile
+          fileVersion: v1
+        - type: S3
+          name: myS3
+    - type: S3
+      name: myS3

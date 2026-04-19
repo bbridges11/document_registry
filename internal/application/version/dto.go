@@ -1,0 +1,130 @@
+package version
+
+import (
+	"io"
+	"time"
+
+	"github.com/bbridges_11/document-registry/internal/domain/approval"
+	"github.com/bbridges_11/document-registry/internal/domain/workflow"
+	"github.com/google/uuid"
+)
+
+type CreateVersionCommand struct {
+	DocumentID  uuid.UUID
+	Version     string
+	Content     io.Reader
+	ContentHash string
+	Metadata    map[string]any
+	CreatedBy   string
+}
+
+type UpdateVersionCommand struct {
+	ID          uuid.UUID
+	Content     io.Reader
+	ContentHash string
+	Metadata    map[string]any
+	UpdatedBy   string
+}
+
+type SubmitVersionCommand struct {
+	ID          uuid.UUID
+	SubmittedBy string
+}
+
+type ReviewVersionCommand struct {
+	ID         uuid.UUID
+	ReviewedBy string
+}
+
+type ApproveVersionCommand struct {
+	ID         uuid.UUID
+	ApprovedBy string
+	Role       approval.ApprovalRole
+	Comment    string
+}
+
+type RejectVersionCommand struct {
+	ID         uuid.UUID
+	RejectedBy string
+	Reason     string
+}
+
+type PublishVersionCommand struct {
+	ID          uuid.UUID
+	PublishedBy string
+}
+
+type GetVersionQuery struct {
+	ID uuid.UUID
+}
+
+type ListVersionsByDocumentQuery struct {
+	DocumentID uuid.UUID
+}
+
+type GetVersionStatusQuery struct {
+	ID uuid.UUID
+}
+
+type GetVersionApprovalsQuery struct {
+	ID uuid.UUID
+}
+
+type VersionDTO struct {
+	ID           uuid.UUID
+	DocumentID   uuid.UUID
+	Version      string
+	Status       workflow.Status
+	ContentS3Key string
+	ContentHash  string
+	Metadata     map[string]any
+	CreatedBy    string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type VersionStatusDTO struct {
+	ID              uuid.UUID
+	Version         string
+	Status          workflow.Status
+	Editable        bool
+	Terminal        bool
+	Publishable     bool
+	AllowedActions  []workflow.Action
+	ApprovalSummary ApprovalSummaryDTO
+}
+
+type ApprovalSummaryDTO struct {
+	Required  map[approval.ApprovalRole]int
+	Received  map[approval.ApprovalRole]int
+	Remaining map[approval.ApprovalRole]int
+	Complete  bool
+}
+
+type VersionApprovalsDTO struct {
+	VersionID  uuid.UUID
+	Version    string
+	Status     workflow.Status
+	Approvals  []ApprovalDTO
+	Summary    ApprovalSummaryDTO
+	AuditTrail []ApprovalAuditDTO
+}
+
+type ApprovalDTO struct {
+	ID        uuid.UUID
+	UserID    string
+	UserName  string
+	Role      approval.ApprovalRole
+	Approved  bool
+	Comment   string
+	CreatedAt time.Time
+}
+
+type ApprovalAuditDTO struct {
+	UserID    string
+	UserName  string
+	Role      approval.ApprovalRole
+	Action    string
+	Comment   string
+	Timestamp time.Time
+}
