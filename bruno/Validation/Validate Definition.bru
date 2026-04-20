@@ -1,0 +1,25 @@
+meta {
+  name: Validate Definition
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/validation/definition
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "type": "technical-documentation",
+    "content": {
+      "title": "Test",
+      "sections": []
+    }
+  }
+}

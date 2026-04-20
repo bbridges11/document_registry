@@ -1,0 +1,21 @@
+meta {
+  name: Approve Version
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/approve
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "comment": "Approved"
+  }
+}

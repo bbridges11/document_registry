@@ -1,0 +1,22 @@
+meta {
+  name: Create Version
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/documents/{{document_id}}/versions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "version_number": "1.0.0",
+    "change_summary": "Initial version"
+  }
+}

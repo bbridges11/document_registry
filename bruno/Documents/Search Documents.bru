@@ -1,0 +1,22 @@
+meta {
+  name: Search Documents
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/documents/search?q=api&type=technical-documentation
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+params:query {
+  q: api
+  ~type: 
+  ~page: 1
+  ~limit: 20
+}

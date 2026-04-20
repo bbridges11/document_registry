@@ -2,12 +2,15 @@
 .DEFAULT_GOAL := help
 
 # Variables
-DOCKER_COMPOSE := docker-compose
+DOCKER_COMPOSE := docker compose
 DOCKER := docker
 APP_NAME := document-registry
-OPENFGA_CONTAINER := openfga
-POSTGRES_CONTAINER := postgres
-LOCALSTACK_CONTAINER := localstack
+COMPOSE_PROJECT := document-registry
+
+# Service names from docker-compose.yml
+POSTGRES_CONTAINER := document-registry-postgres
+OPENFGA_CONTAINER := document-registry-openfga
+LOCALSTACK_CONTAINER := document-registry-localstack
 
 # Colors for output
 BLUE := \033[0;34m
@@ -63,84 +66,67 @@ tidy: ## Tidy go.mod
 	go mod tidy
 	@echo "$(GREEN)✓ go.mod tidied$(NC)"
 
-##@ Docker - Individual Services
-
-.PHONY: docker-openfga
-docker-openfga: ## Start OpenFGA container
-	@echo "$(BLUE)Starting OpenFGA...$(NC)"
-	$(DOCKER) run -d \
-		--name $(OPENFGA_CONTAINER) \
-		-p 8081:8080 \
-		-p 8082:8081 \
-		-p 3000:3000 \
-		openfga/openfga run
-	@echo "$(GREEN)✓ OpenFGA started$(NC)"
-	@echo "  - API: http://localhost:8081"
-	@echo "  - Playground: http://localhost:3000"
-
-.PHONY: docker-openfga-stop
-docker-openfga-stop: ## Stop OpenFGA container
-	@echo "$(YELLOW)Stopping OpenFGA...$(NC)"
-	-$(DOCKER) stop $(OPENFGA_CONTAINER) 2>/dev/null
-	-$(DOCKER) rm $(OPENFGA_CONTAINER) 2>/dev/null
-	@echo "$(GREEN)✓ OpenFGA stopped$(NC)"
-
-.PHONY: docker-openfga-logs
-docker-openfga-logs: ## Show OpenFGA logs
-	$(DOCKER) logs -f $(OPENFGA_CONTAINER)
+##@ Docker - Individual Services (Optional - use docker-compose instead)
 
 .PHONY: docker-postgres
-docker-postgres: ## Start PostgreSQL container
+docker-postgres: ## Start only PostgreSQL service
 	@echo "$(BLUE)Starting PostgreSQL...$(NC)"
-	$(DOCKER) run -d \
-		--name $(POSTGRES_CONTAINER) \
-		-p 5432:5432 \
-		-e POSTGRES_DB=document_registry \
-		-e POSTGRES_USER=postgres \
-		-e POSTGRES_PASSWORD=postgres \
-		postgres:16
+	$(DOCKER_COMPOSE) up -d postgres
 	@echo "$(GREEN)✓ PostgreSQL started$(NC)"
 	@echo "  - Host: localhost:5432"
 	@echo "  - Database: document_registry"
 
 .PHONY: docker-postgres-stop
-docker-postgres-stop: ## Stop PostgreSQL container
+docker-postgres-stop: ## Stop PostgreSQL service
 	@echo "$(YELLOW)Stopping PostgreSQL...$(NC)"
-	-$(DOCKER) stop $(POSTGRES_CONTAINER) 2>/dev/null
-	-$(DOCKER) rm $(POSTGRES_CONTAINER) 2>/dev/null
+	$(DOCKER_COMPOSE) stop postgres
 	@echo "$(GREEN)✓ PostgreSQL stopped$(NC)"
 
 .PHONY: docker-postgres-logs
 docker-postgres-logs: ## Show PostgreSQL logs
-	$(DOCKER) logs -f $(POSTGRES_CONTAINER)
+	$(DOCKER_COMPOSE) logs -f postgres
+
+.PHONY: docker-openfga
+docker-openfga: ## Start only OpenFGA service
+	@echo "$(BLUE)Starting OpenFGA...$(NC)"
+	$(DOCKER_COMPOSE) up -d openfga
+	@echo "$(GREEN)✓ OpenFGA started$(NC)"
+	@echo "  - API: http://localhost:8081"
+	@echo "  - Playground: http://localhost:3000"
+
+.PHONY: docker-openfga-stop
+docker-openfga-stop: ## Stop OpenFGA service
+	@echo "$(YELLOW)Stopping OpenFGA...$(NC)"
+	$(DOCKER_COMPOSE) stop openfga
+	@echo "$(GREEN)✓ OpenFGA stopped$(NC)"
+
+.PHONY: docker-openfga-logs
+docker-openfga-logs: ## Show OpenFGA logs
+	$(DOCKER_COMPOSE) logs -f openfga
 
 .PHONY: docker-localstack
-docker-localstack: ## Start LocalStack (S3) container
+docker-localstack: ## Start only LocalStack service
 	@echo "$(BLUE)Starting LocalStack...$(NC)"
-	$(DOCKER) run -d \
-		--name $(LOCALSTACK_CONTAINER) \
-		-p 4566:4566 \
-		-e SERVICES=s3 \
-		-e DEFAULT_REGION=us-east-1 \
-		localstack/localstack
+	$(DOCKER_COMPOSE) up -d localstack
 	@echo "$(GREEN)✓ LocalStack started$(NC)"
 	@echo "  - S3 Endpoint: http://localhost:4566"
 
 .PHONY: docker-localstack-stop
-docker-localstack-stop: ## Stop LocalStack container
+docker-localstack-stop: ## Stop LocalStack service
 	@echo "$(YELLOW)Stopping LocalStack...$(NC)"
-	-$(DOCKER) stop $(LOCALSTACK_CONTAINER) 2>/dev/null
-	-$(DOCKER) rm $(LOCALSTACK_CONTAINER) 2>/dev/null
+	$(DOCKER_COMPOSE) stop localstack
 	@echo "$(GREEN)✓ LocalStack stopped$(NC)"
 
 .PHONY: docker-localstack-logs
 docker-localstack-logs: ## Show LocalStack logs
-	$(DOCKER) logs -f $(LOCALSTACK_CONTAINER)
+	$(DOCKER_COMPOSE) logs -f localstack
 
 ##@ Docker - Combined Operations
 
 .PHONY: docker-up
-docker-up: docker-postgres docker-openfga docker-localstack ## Start all infrastructure containers
+docker-up: ## Start all infrastructure containers with docker-compose
+	@echo "$(BLUE)Starting all services with docker-compose...$(NC)"
+	$(DOCKER_COMPOSE) up -d
 	@echo ""
 	@echo "$(GREEN)✓ All infrastructure started$(NC)"
 	@echo ""
@@ -153,23 +139,37 @@ docker-up: docker-postgres docker-openfga docker-localstack ## Start all infrast
 	@echo "$(YELLOW)Next: Run 'make openfga-setup' to create store$(NC)"
 
 .PHONY: docker-down
-docker-down: docker-postgres-stop docker-openfga-stop docker-localstack-stop ## Stop all infrastructure containers
+docker-down: ## Stop all infrastructure containers
+	@echo "$(YELLOW)Stopping all services...$(NC)"
+	$(DOCKER_COMPOSE) down
 	@echo "$(GREEN)✓ All infrastructure stopped$(NC)"
 
 .PHONY: docker-restart
 docker-restart: docker-down docker-up ## Restart all infrastructure containers
 
 .PHONY: docker-clean
-docker-clean: docker-down ## Stop and remove all containers, volumes, and networks
-	@echo "$(YELLOW)Cleaning Docker resources...$(NC)"
-	-$(DOCKER) volume prune -f
-	-$(DOCKER) network prune -f
+docker-clean: ## Stop and remove all containers, volumes, and networks
+	@echo "$(RED)WARNING: This will remove all volumes and data!$(NC)"
+	@echo "$(YELLOW)Press Ctrl+C to cancel, or wait 5 seconds to continue...$(NC)"
+	@sleep 5
+	@echo "$(YELLOW)Stopping and removing all services with volumes...$(NC)"
+	$(DOCKER_COMPOSE) down -v
 	@echo "$(GREEN)✓ Docker resources cleaned$(NC)"
 
 .PHONY: docker-ps
 docker-ps: ## Show running containers
 	@echo "$(BLUE)Running containers:$(NC)"
-	@$(DOCKER) ps --filter "name=$(POSTGRES_CONTAINER)" --filter "name=$(OPENFGA_CONTAINER)" --filter "name=$(LOCALSTACK_CONTAINER)" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+	$(DOCKER_COMPOSE) ps
+
+.PHONY: docker-logs
+docker-logs: ## Show logs from all services
+	$(DOCKER_COMPOSE) logs -f
+
+.PHONY: docker-pull
+docker-pull: ## Pull latest images
+	@echo "$(BLUE)Pulling latest images...$(NC)"
+	$(DOCKER_COMPOSE) pull
+	@echo "$(GREEN)✓ Images pulled$(NC)"
 
 ##@ OpenFGA Setup
 

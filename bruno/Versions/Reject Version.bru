@@ -1,0 +1,21 @@
+meta {
+  name: Reject Version
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/reject
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "reason": "Needs revision"
+  }
+}

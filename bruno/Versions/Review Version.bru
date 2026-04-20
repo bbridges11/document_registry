@@ -1,0 +1,21 @@
+meta {
+  name: Review Version
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/review
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "comment": "Looks good"
+  }
+}

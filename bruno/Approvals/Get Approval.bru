@@ -1,0 +1,15 @@
+meta {
+  name: Get Approval
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/approvals/{{approval_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

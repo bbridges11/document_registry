@@ -1,0 +1,22 @@
+meta {
+  name: Request Deprecation
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/deprecate
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "reason": "Security vulnerability CVE-2024-1234",
+    "deprecation_note": "Please upgrade to v2.0.0"
+  }
+}

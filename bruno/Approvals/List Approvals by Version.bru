@@ -1,0 +1,15 @@
+meta {
+  name: List Approvals by Version
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/versions/{{version_id}}/approvals/list
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Grant Approval
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/approvals/grant
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "user_id": "{{user_id}}",
+    "role": "technical-reviewer"
+  }
+}

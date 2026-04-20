@@ -1,0 +1,22 @@
+meta {
+  name: Add Stakeholder
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/documents/{{document_id}}/stakeholders
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "user_id": "{{user_id}}",
+    "role": "contributor"
+  }
+}

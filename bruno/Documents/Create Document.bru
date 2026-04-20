@@ -1,0 +1,23 @@
+meta {
+  name: Create Document
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/documents
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "title": "API Integration Guide",
+    "type": "technical-documentation",
+    "description": "Comprehensive API guide"
+  }
+}

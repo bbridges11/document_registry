@@ -1,0 +1,15 @@
+meta {
+  name: Publish Version
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/publish
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}
