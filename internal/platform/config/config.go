@@ -96,11 +96,26 @@ type DynamoConfig struct {
 type AWSConfig struct {
 	Region string `env:"AWS_REGION" envDefault:"us-east-1"`
 	S3     S3Config
+	SNS    SNSConfig
 }
 
 type S3Config struct {
 	Bucket   string `env:"S3_BUCKET" envDefault:"document-registry"`
 	Endpoint string `env:"S3_ENDPOINT"`
+}
+
+// SNSConfig holds AWS SNS configuration
+type SNSConfig struct {
+	// TopicARN is the ARN of the SNS topic to publish notifications to
+	TopicARN string `env:"SNS_TOPIC_ARN"`
+
+	// Enabled controls whether SNS is enabled or in bypass mode
+	// When false, notifications are logged but not sent
+	Enabled bool `env:"SNS_ENABLED" envDefault:"false"`
+
+	// Endpoint is the SNS endpoint URL (for LocalStack)
+	// Leave empty for AWS SNS
+	Endpoint string `env:"SNS_ENDPOINT"`
 }
 
 type OpenFGAConfig struct {

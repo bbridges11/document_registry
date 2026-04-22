@@ -23,7 +23,7 @@ services:
     image: localstack/localstack:latest
     container_name: document-registry-localstack
     environment:
-      SERVICES: s3
+      SERVICES: s3,sns
       DEBUG: 1
       DATA_DIR: /tmp/localstack/data
       DOCKER_HOST: unix:///var/run/docker.sock

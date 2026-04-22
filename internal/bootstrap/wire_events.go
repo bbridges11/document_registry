@@ -14,4 +14,6 @@ func registerEventHandlers(infra *infrastructure, log *zap.Logger) {
 	infra.EventBus.Subscribe(events.EventStakeholderRemoved, authzHandler.HandleStakeholderRemoved)
 	infra.EventBus.Subscribe(events.EventVersionCreated, authzHandler.HandleVersionCreated)
 	infra.EventBus.Subscribe(events.EventVersionPublished, authzHandler.HandleVersionPublished)
+
+	registerNotificationHandlers(infra, log)
 }

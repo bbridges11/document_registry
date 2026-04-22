@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/authorization/openfga"
+	"github.com/bbridges_11/document-registry/internal/adapters/outbound/notification/sns"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/persistence/postgres"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/storage/s3"
 	useradapter "github.com/bbridges_11/document-registry/internal/adapters/outbound/user"
@@ -18,17 +19,18 @@ import (
 )
 
 type infrastructure struct {
-	Runner          *dbPostgres.Runner
-	EventBus        *platformEvents.Bus
-	DocumentRepo    outbound.DocumentRepository
-	VersionRepo     outbound.VersionRepository
-	StakeholderRepo outbound.StakeholderRepository
-	ApprovalRepo    outbound.ApprovalRepository
-	UserRepo        outbound.UserRepository
-	DeprecationRepo outbound.DeprecationRepository
-	StorageService  outbound.StorageService
-	AuthzService    outbound.AuthorizationService
-	UserService     outbound.UserService
+	Runner              *dbPostgres.Runner
+	EventBus            *platformEvents.Bus
+	DocumentRepo        outbound.DocumentRepository
+	VersionRepo         outbound.VersionRepository
+	StakeholderRepo     outbound.StakeholderRepository
+	ApprovalRepo        outbound.ApprovalRepository
+	UserRepo            outbound.UserRepository
+	DeprecationRepo     outbound.DeprecationRepository
+	StorageService      outbound.StorageService
+	AuthzService        outbound.AuthorizationService
+	UserService         outbound.UserService
+	NotificationService outbound.NotificationService
 }
 
 func wireConfigAndLogger() (*config.Config, *zap.Logger) {
@@ -55,6 +57,9 @@ func wireInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 	s3Client := try.To1(aws.NewS3Client(ctx, cfg.AWS))
 	log.Info("s3 client initialized")
 
+	snsClient := try.To1(aws.NewSNSClient(ctx, cfg.AWS))
+	log.Info("SNS client initialized")
+
 	eventBus := platformEvents.NewBus(log, 1000, 4)
 	eventBus.Use(platformEvents.RecoveryMiddleware(log))
 	eventBus.Use(platformEvents.LoggingMiddleware(log))
@@ -64,16 +69,17 @@ func wireInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 	authzService := try.To1(openfga.NewAuthorizationAdapter(cfg.OpenFGA, log))
 
 	return &infrastructure{
-		Runner:          runner,
-		EventBus:        eventBus,
-		DocumentRepo:    postgres.NewDocumentRepository(runner),
-		VersionRepo:     postgres.NewVersionRepository(runner),
-		StakeholderRepo: postgres.NewStakeholderRepository(runner),
-		ApprovalRepo:    postgres.NewApprovalRepository(runner),
-		UserRepo:        postgres.NewUserRepository(runner),
-		DeprecationRepo: postgres.NewDeprecationRepository(runner),
-		StorageService:  s3.NewStorageAdapter(s3Client, cfg.AWS.S3),
-		AuthzService:    authzService,
-		UserService:     useradapter.NewServiceAdapter(cfg.User),
+		Runner:              runner,
+		EventBus:            eventBus,
+		DocumentRepo:        postgres.NewDocumentRepository(runner),
+		VersionRepo:         postgres.NewVersionRepository(runner),
+		StakeholderRepo:     postgres.NewStakeholderRepository(runner),
+		ApprovalRepo:        postgres.NewApprovalRepository(runner),
+		UserRepo:            postgres.NewUserRepository(runner),
+		DeprecationRepo:     postgres.NewDeprecationRepository(runner),
+		StorageService:      s3.NewStorageAdapter(s3Client, cfg.AWS.S3),
+		AuthzService:        authzService,
+		UserService:         useradapter.NewServiceAdapter(cfg.User),
+		NotificationService: sns.NewSNSAdapter(snsClient, cfg.AWS.SNS, log),
 	}
 }
