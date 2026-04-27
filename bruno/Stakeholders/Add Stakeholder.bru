@@ -7,16 +7,35 @@ meta {
 post {
   url: {{base_url}}/documents/{{document_id}}/stakeholders
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "user_id": "{{user_id}}",
+    "user_id": "user-456",
     "role": "contributor"
   }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const data = res.body;
+    bru.setVar("stakeholder_id", data.stakeholder_id);
+  }
+}
+
+docs {
+  Add a stakeholder to a document.
+  
+  Roles:
+  - owner
+  - contributor
+  - reviewer
+  
+  Stakeholders can approve versions based on their role.
 }

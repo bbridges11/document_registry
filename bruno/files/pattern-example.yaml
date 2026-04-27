@@ -1,0 +1,27 @@
+kind: Pattern
+version: v1
+inputs:
+  api_name:
+    type: string
+    description: Name of the API
+  base_path:
+    type: string
+    description: Base path for API endpoints
+components:
+  - name: api-gateway
+    type: service
+    description: Central API gateway for routing requests
+    properties:
+      port: 8080
+      protocol: HTTP
+  - name: auth-service
+    type: service
+    description: Authentication and authorization service
+    properties:
+      port: 8081
+      protocol: HTTP
+relationships:
+  - from: api-gateway
+    to: auth-service
+    type: depends_on
+    description: Gateway authenticates via auth service

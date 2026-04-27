@@ -1,21 +1,35 @@
 meta {
   name: Approve Version
   type: http
-  seq: 7
+  seq: 5
 }
 
 post {
   url: {{base_url}}/versions/{{version_id}}/approve
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "comment": "Approved"
+    "comment": "Approved - looks good",
+    "role": "engineer"
   }
+}
+
+docs {
+  Approve a version.
+  
+  Roles:
+  - engineer
+  - architect
+  - product_manager
+  
+  Multiple approvals may be required based on approval policy.
+  Version moves to APPROVED when all required approvals received.
 }

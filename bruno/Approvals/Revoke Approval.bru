@@ -7,9 +7,20 @@ meta {
 post {
   url: {{base_url}}/versions/{{version_id}}/approvals/revoke/{{user_id}}
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Revoke a previously granted approval.
+  
+  Requires:
+  - Version ID
+  - User ID of the person whose approval to revoke
+  
+  Typically used when changes are made after approval
+  or approval was granted in error.
 }

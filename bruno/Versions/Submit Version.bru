@@ -1,15 +1,30 @@
 meta {
   name: Submit Version
   type: http
-  seq: 5
+  seq: 4
 }
 
 post {
   url: {{base_url}}/versions/{{version_id}}/submit
-  body: none
-  auth: bearer
+  body: json
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "comment": "Ready for review"
+  }
+}
+
+docs {
+  Submit a version for review.
+  
+  Workflow: DRAFT → SUBMITTED
+  
+  After submission, stakeholders can approve/reject.
 }

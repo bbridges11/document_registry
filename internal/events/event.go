@@ -14,14 +14,15 @@ const (
 	EventStakeholderRemoved EventType = "stakeholder.removed"
 
 	// Version events
-	EventVersionCreated    EventType = "version.created"
-	EventVersionUpdated    EventType = "version.updated"
-	EventVersionSubmitted  EventType = "version.submitted"
-	EventVersionInReview   EventType = "version.in_review"
-	EventVersionApproved   EventType = "version.approved"
-	EventVersionRejected   EventType = "version.rejected"
-	EventVersionPublished  EventType = "version.published"
-	EventVersionDeprecated EventType = "version.deprecated"
+	EventVersionCreated       EventType = "version.created"
+	EventVersionUpdated       EventType = "version.updated"
+	EventVersionSubmitted     EventType = "version.submitted"
+	EventVersionInReview      EventType = "version.in_review"
+	EventVersionApproved      EventType = "version.approved"
+	EventVersionFullyApproved EventType = "version.fully_approved"
+	EventVersionRejected      EventType = "version.rejected"
+	EventVersionPublished     EventType = "version.published"
+	EventVersionDeprecated    EventType = "version.deprecated"
 
 	// Deprecation events
 	EventDeprecationRequested     EventType = "deprecation.requested"

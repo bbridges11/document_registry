@@ -1,15 +1,27 @@
 meta {
   name: Deactivate User
   type: http
-  seq: 7
+  seq: 5
 }
 
 post {
-  url: {{base_url}}/users/{{user_id}}/deactivate
+  url: {{base_url}}/users/{{created_user_id}}/deactivate
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Deactivate a user account.
+  
+  Requires admin privileges (X-User-ID must be an admin).
+  
+  Deactivated users:
+  - Cannot log in
+  - Cannot perform actions
+  - Remain in the system (not deleted)
+  - Can be reactivated
 }

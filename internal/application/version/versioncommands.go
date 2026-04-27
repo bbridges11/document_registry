@@ -8,6 +8,8 @@ import (
 
 	"github.com/bbridges_11/document-registry/internal/domain/approval"
 	"github.com/bbridges_11/document-registry/internal/domain/deprecation"
+	"github.com/bbridges_11/document-registry/internal/domain/publication"
+	"github.com/bbridges_11/document-registry/internal/domain/shared"
 	"github.com/bbridges_11/document-registry/internal/domain/version"
 	"github.com/bbridges_11/document-registry/internal/domain/workflow"
 	"github.com/bbridges_11/document-registry/internal/events"
@@ -24,9 +26,10 @@ type CommandService struct {
 	documentRepo     outbound.DocumentRepository
 	approvalRepo     outbound.ApprovalRepository
 	deprecationRepo  outbound.DeprecationRepository
+	publicationRepo  outbound.PublicationRepository
 	storageService   outbound.StorageService
+	publisherService outbound.PublisherService
 	txManager        outbound.TransactionManager
-	authz            outbound.AuthorizationService
 	userRepo         outbound.UserRepository
 	eventBus         outbound.EventBus
 	workflowFactory  *workflow.Factory
@@ -39,9 +42,10 @@ func NewCommandService(
 	documentRepo outbound.DocumentRepository,
 	approvalRepo outbound.ApprovalRepository,
 	deprecationRepo outbound.DeprecationRepository,
+	publicationRepo outbound.PublicationRepository,
 	storageService outbound.StorageService,
+	publisherService outbound.PublisherService,
 	txManager outbound.TransactionManager,
-	authz outbound.AuthorizationService,
 	userRepo outbound.UserRepository,
 	eventBus outbound.EventBus,
 	workflowFactory *workflow.Factory,
@@ -53,9 +57,10 @@ func NewCommandService(
 		documentRepo:     documentRepo,
 		approvalRepo:     approvalRepo,
 		deprecationRepo:  deprecationRepo,
+		publicationRepo:  publicationRepo,
 		storageService:   storageService,
+		publisherService: publisherService,
 		txManager:        txManager,
-		authz:            authz,
 		userRepo:         userRepo,
 		eventBus:         eventBus,
 		workflowFactory:  workflowFactory,
@@ -85,21 +90,15 @@ func (s *CommandService) CreateVersion(ctx context.Context, cmd CreateVersionCom
 	// Validate document exists and get document type
 	doc := try.To1(s.documentRepo.GetByID(ctx, cmd.DocumentID))
 
-	// Check authorization
-	allowed := try.To1(s.authz.CanCreateVersion(ctx, cmd.CreatedBy, cmd.DocumentID.String()))
-	if !allowed {
-		return nil, nil, errors.ErrForbidden
-	}
-
-	// Step 3: VALIDATE CONTENT FIRST (before S3, before DB)
+	// Step 3: VALIDATE CONTENT FIRST (before storage, before DB)
 	var validationResult *outbound.ValidationResult
-	if s.contentValidator.ShouldValidate(doc.DocumentType()) {
+	if doc.DocumentType().RequiresValidation() {
 		validationResult = try.To1(s.contentValidator.Validate(ctx, outbound.ValidationRequest{
-			DocumentType: doc.DocumentType(),
+			DocumentType: doc.DocumentType().Code(),
 			Content:      contentBytes,
 		}))
 
-		// If validation failed, return immediately - NO S3 upload, NO DB transaction
+		// If validation failed, return immediately - NO storage upload, NO DB transaction
 		if !validationResult.Valid {
 			return nil, validationResult, errors.New(
 				errors.CodeValidationFailed,
@@ -108,17 +107,21 @@ func (s *CommandService) CreateVersion(ctx context.Context, cmd CreateVersionCom
 		}
 	}
 
-	// Generate S3 key using new format: {documentType}/{documentID}/{version}/content
-	s3Key := storage.GenerateS3Key(doc.DocumentType(), cmd.DocumentID.String(), cmd.Version)
+	// Generate storage key using format: {documentType}/{documentID}/{version}/content
+	storageKey := storage.GenerateS3Key(doc.DocumentType().Code(), cmd.DocumentID.String(), cmd.Version)
 
-	// Upload validated content to S3
-	try.To(s.storageService.Upload(ctx, s3Key, bytes.NewReader(contentBytes)))
+	// Upload validated content to storage (using S3 backend by default)
+	contentRef := try.To1(s.storageService.Upload(ctx, outbound.StorageRequest{
+		Backend: shared.StorageBackendS3,
+		Key:     storageKey,
+		Content: bytes.NewReader(contentBytes),
+	}))
 
 	// Check if version already exists - if so, fail immediately (no overwrites allowed)
 	_, err = s.versionRepo.GetByDocumentIDAndVersion(ctx, cmd.DocumentID, cmd.Version)
 	if err == nil {
-		// Version exists - clean up S3 and fail
-		_ = s.storageService.Delete(ctx, s3Key)
+		// Version exists - clean up storage and fail
+		_ = s.storageService.Delete(ctx, contentRef)
 		return nil, nil, errors.New(errors.CodeVersionConflict, "version already exists")
 	}
 
@@ -128,13 +131,13 @@ func (s *CommandService) CreateVersion(ctx context.Context, cmd CreateVersionCom
 		newSemVer := try.To1(version.NewSemanticVersion(cmd.Version))
 		if !newSemVer.IsGreaterThan(latestVer.Version()) {
 			// Clean up uploaded content since version validation failed
-			_ = s.storageService.Delete(ctx, s3Key)
+			_ = s.storageService.Delete(ctx, contentRef)
 			return nil, nil, errors.New(errors.CodeVersionConflict, "version must be strictly greater than latest version")
 		}
 	}
 
-	// Create new version with S3 key and calculated hash
-	ver = try.To1(version.NewVersion(cmd.DocumentID, cmd.Version, s3Key, contentHash, cmd.CreatedBy, cmd.Metadata))
+	// Create new version with content reference and calculated hash
+	ver = try.To1(version.NewVersion(cmd.DocumentID, cmd.Version, contentRef, contentHash, cmd.CreatedBy, cmd.Metadata))
 	try.To(s.versionRepo.Save(ctx, ver))
 
 	// Publish events after successful persistence
@@ -142,7 +145,7 @@ func (s *CommandService) CreateVersion(ctx context.Context, cmd CreateVersionCom
 
 	// Publish validation audit event
 	if validationResult != nil {
-		s.publishValidationEvent(ctx, cmd.DocumentID.String(), ver.ID().String(), doc.DocumentType(), true, 0, cmd.CreatedBy)
+		s.publishValidationEvent(ctx, cmd.DocumentID.String(), ver.ID().String(), doc.DocumentType().Code(), true, 0, cmd.CreatedBy)
 	}
 
 	return ver, validationResult, nil
@@ -153,14 +156,8 @@ func (s *CommandService) UpdateVersion(ctx context.Context, cmd UpdateVersionCom
 
 	ver := try.To1(s.versionRepo.GetByID(ctx, cmd.ID))
 
-	// Check authorization
-	allowed := try.To1(s.authz.CanOverwriteVersion(ctx, cmd.UpdatedBy, cmd.ID.String()))
-	if !allowed {
-		return errors.ErrForbidden
-	}
-
-	// Update metadata only (content and hash remain unchanged)
-	try.To(ver.Update(ver.ContentS3Key(), ver.ContentHash(), cmd.Metadata))
+	// Update metadata only (content reference and hash remain unchanged)
+	try.To(ver.Update(ver.ContentRef(), ver.ContentHash(), cmd.Metadata))
 	try.To(s.versionRepo.Save(ctx, ver))
 
 	return nil
@@ -171,15 +168,9 @@ func (s *CommandService) SubmitVersion(ctx context.Context, cmd SubmitVersionCom
 
 	ver := try.To1(s.versionRepo.GetByID(ctx, cmd.ID))
 
-	// Check authorization
-	allowed := try.To1(s.authz.CanSubmitVersion(ctx, cmd.SubmittedBy, cmd.ID.String()))
-	if !allowed {
-		return errors.ErrForbidden
-	}
-
 	// Get document to determine workflow
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
-	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType()))
+	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
 
 	try.To(ver.Submit(cmd.SubmittedBy, wf))
 	try.To(s.versionRepo.Save(ctx, ver))
@@ -195,15 +186,9 @@ func (s *CommandService) ReviewVersion(ctx context.Context, cmd ReviewVersionCom
 
 	ver := try.To1(s.versionRepo.GetByID(ctx, cmd.ID))
 
-	// Check authorization
-	allowed := try.To1(s.authz.CanReviewVersion(ctx, cmd.ReviewedBy, cmd.ID.String()))
-	if !allowed {
-		return errors.ErrForbidden
-	}
-
 	// Get document to determine workflow
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
-	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType()))
+	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
 
 	try.To(ver.Review(cmd.ReviewedBy, wf))
 	try.To(s.versionRepo.Save(ctx, ver))
@@ -220,15 +205,9 @@ func (s *CommandService) ApproveVersion(ctx context.Context, cmd ApproveVersionC
 	return s.txManager.WithinTransaction(ctx, func(ctx context.Context) error {
 		ver := try.To1(s.versionRepo.GetByID(ctx, cmd.ID))
 
-		// Check authorization
-		allowed := try.To1(s.authz.CanApproveVersion(ctx, cmd.ApprovedBy, cmd.ID.String()))
-		if !allowed {
-			return errors.ErrForbidden
-		}
-
 		// Get document to determine policy
 		doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
-		policy := try.To1(s.policyFactory.GetPolicy(doc.DocumentType()))
+		policy := try.To1(s.policyFactory.GetPolicy(doc.DocumentType().ApprovalPolicy()))
 
 		// Get user to determine approval roles
 		// Parse user ID as UUID
@@ -245,14 +224,18 @@ func (s *CommandService) ApproveVersion(ctx context.Context, cmd ApproveVersionC
 			userRoles = []approval.ApprovalRole{
 				approval.ApprovalRoleTechnical,
 				approval.ApprovalRoleArchitect,
-				approval.ApprovalRoleProduct,
+				approval.ApprovalRoleAdmin,
 			}
-		case "contributor":
+		case "architect":
+			userRoles = []approval.ApprovalRole{
+				approval.ApprovalRoleArchitect,
+			}
+		case "engineer":
 			userRoles = []approval.ApprovalRole{
 				approval.ApprovalRoleTechnical,
 			}
 		default:
-			// Viewers have no approval roles
+			// Product, viewers have no approval roles
 			userRoles = []approval.ApprovalRole{}
 		}
 
@@ -268,16 +251,34 @@ func (s *CommandService) ApproveVersion(ctx context.Context, cmd ApproveVersionC
 		// Save approval
 		try.To(s.approvalRepo.Save(ctx, newApproval))
 
+		// Publish VersionApproved event
+		approvedEvent := events.NewVersionApproved(
+			ver.ID().String(),
+			ver.DocumentID().String(),
+			ver.Version().String(),
+			cmd.ApprovedBy,
+			cmd.Role.String(),
+		)
+		s.eventBus.Publish(ctx, events.NewEnvelope(approvedEvent, ""))
+
 		// Check if all approvals are satisfied
 		allApprovals := append(existingApprovals, newApproval)
 		if policy.IsSatisfied(allApprovals) {
 			// Transition version to APPROVED
-			wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType()))
+			wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
 			try.To(ver.Approve(cmd.ApprovedBy, cmd.Role.String(), wf))
 			try.To(s.versionRepo.Save(ctx, ver))
 
 			// Publish events after successful persistence
 			s.publishEvents(ctx, ver, "")
+
+			// Emit VersionFullyApproved event - policy is satisfied
+			fullyApprovedEvent := events.NewVersionFullyApproved(
+				ver.ID().String(),
+				ver.DocumentID().String(),
+				ver.Version().String(),
+			)
+			s.eventBus.Publish(ctx, events.NewEnvelope(fullyApprovedEvent, ""))
 		}
 
 		return nil
@@ -289,15 +290,9 @@ func (s *CommandService) RejectVersion(ctx context.Context, cmd RejectVersionCom
 
 	ver := try.To1(s.versionRepo.GetByID(ctx, cmd.ID))
 
-	// Check authorization
-	allowed := try.To1(s.authz.CanRejectVersion(ctx, cmd.RejectedBy, cmd.ID.String()))
-	if !allowed {
-		return errors.ErrForbidden
-	}
-
 	// Get document to determine workflow
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
-	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType()))
+	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
 
 	try.To(ver.Reject(cmd.RejectedBy, cmd.Reason, wf))
 	try.To(s.versionRepo.Save(ctx, ver))
@@ -311,20 +306,73 @@ func (s *CommandService) RejectVersion(ctx context.Context, cmd RejectVersionCom
 func (s *CommandService) PublishVersion(ctx context.Context, cmd PublishVersionCommand) (err error) {
 	defer err2.Handle(&err)
 
-	var eventsToPublish []events.Event
+	// Validate destination
+	if cmd.Destination == "" {
+		return errors.New(errors.CodeInvalidArgument, "destination is required")
+	}
 
-	try.To(s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
+	var eventsToPublish []events.Event
+	var pub *publication.Publication
+
+	err = s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
 		ver := try.To1(s.versionRepo.GetByID(txCtx, cmd.ID))
 
-		// Check authorization
-		allowed := try.To1(s.authz.CanPublishVersion(txCtx, cmd.PublishedBy, cmd.ID.String()))
-		if !allowed {
-			return errors.ErrForbidden
+		// Check user has product role
+		userID := try.To1(uuid.Parse(cmd.PublishedBy))
+		user := try.To1(s.userRepo.GetByID(txCtx, userID))
+
+		if user.Role() != "product" {
+			return errors.New(errors.CodeForbidden, "only product role can publish versions")
 		}
 
-		// Get document to determine workflow
+		// Check version is approved
+		if ver.Status() != workflow.StatusApproved {
+			return errors.New(errors.CodeInvalidState, "version must be approved before publishing")
+		}
+
+		// Get document
 		doc := try.To1(s.documentRepo.GetByID(txCtx, ver.DocumentID()))
-		wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType()))
+		wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
+
+		// Get content from S3
+		content := try.To1(s.storageService.Download(txCtx, ver.ContentRef()))
+		defer content.Close()
+
+		// Read content into bytes
+		contentBytes := try.To1(io.ReadAll(content))
+
+		// Call external API to publish
+		publishReq := outbound.PublishRequest{
+			DocumentID:    ver.DocumentID().String(),
+			VersionNumber: ver.Version().String(),
+			Content:       contentBytes,
+			Metadata:      ver.Metadata(),
+			Destination:   cmd.Destination,
+		}
+
+		err := s.publisherService.Publish(txCtx, publishReq)
+		if err != nil {
+			// Publication failed - create failed publication record
+			failedPub := try.To1(publication.NewPublication(
+				ver.ID(),
+				ver.DocumentID(),
+				cmd.Destination,
+				cmd.PublishedBy,
+			))
+			failedPub.MarkAsFailed(err.Error())
+			try.To(s.publicationRepo.Save(txCtx, failedPub))
+
+			return fmt.Errorf("failed to publish to external system: %w", err)
+		}
+
+		// Publication successful - create success publication record
+		pub = try.To1(publication.NewPublication(
+			ver.ID(),
+			ver.DocumentID(),
+			cmd.Destination,
+			cmd.PublishedBy,
+		))
+		try.To(s.publicationRepo.Save(txCtx, pub))
 
 		// Check for existing PUBLISHED version (enforce single-published rule)
 		previousPublished, err := s.versionRepo.GetPublishedByDocumentID(txCtx, ver.DocumentID())
@@ -361,9 +409,10 @@ func (s *CommandService) PublishVersion(ctx context.Context, cmd PublishVersionC
 		ver.ClearEvents()
 
 		return nil
-	}))
+	})
+	try.To(err)
 
-	// Publish all events after transaction commits
+	// Publish all events after transaction commits (only if successful)
 	for _, evt := range eventsToPublish {
 		s.eventBus.Publish(ctx, events.NewEnvelope(evt, ""))
 	}

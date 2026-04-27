@@ -15,18 +15,15 @@ type Document struct {
 	name         string
 	description  string
 	tags         []string
-	documentType string
+	documentType DocumentType
 	createdAt    time.Time
 	updatedAt    time.Time
 	createdBy    string
 }
 
-func NewDocument(name, description, documentType, createdBy string, tags []string) (*Document, error) {
+func NewDocument(name, description string, documentType DocumentType, createdBy string, tags []string) (*Document, error) {
 	if name == "" {
 		return nil, errors.New(errors.CodeInvalidArgument, "name is required")
-	}
-	if documentType == "" {
-		return nil, errors.New(errors.CodeInvalidArgument, "document type is required")
 	}
 	if createdBy == "" {
 		return nil, errors.New(errors.CodeInvalidArgument, "created by is required")
@@ -47,14 +44,14 @@ func NewDocument(name, description, documentType, createdBy string, tags []strin
 	doc.AggregateRoot.AddEvent(events.NewDocumentCreated(
 		doc.id.String(),
 		doc.name,
-		doc.documentType,
+		doc.documentType.Code(),
 		doc.createdBy,
 	))
 
 	return doc, nil
 }
 
-func RehydrateDocument(id uuid.UUID, name, description, documentType, createdBy string, tags []string, createdAt, updatedAt time.Time) *Document {
+func RehydrateDocument(id uuid.UUID, name, description string, documentType DocumentType, createdBy string, tags []string, createdAt, updatedAt time.Time) *Document {
 	return &Document{
 		id:           id,
 		name:         name,
@@ -98,7 +95,7 @@ func (d *Document) Tags() []string {
 	return d.tags
 }
 
-func (d *Document) DocumentType() string {
+func (d *Document) DocumentType() DocumentType {
 	return d.documentType
 }
 

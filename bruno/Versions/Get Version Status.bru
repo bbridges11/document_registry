@@ -1,15 +1,25 @@
 meta {
   name: Get Version Status
   type: http
-  seq: 10
+  seq: 8
 }
 
 get {
   url: {{base_url}}/versions/{{version_id}}/status
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get detailed status information for a version.
+  
+  Returns:
+  - Current status
+  - Allowed actions
+  - Approval summary
+  - Workflow state
 }

@@ -14,6 +14,7 @@ const (
 	CodeInvalidState     Code = "invalid_state"
 	CodeVersionConflict  Code = "version_conflict"
 	CodeValidationFailed Code = "validation_failed"
+	CodeNotSupported     Code = "not_supported"
 
 	// Deprecation-specific error codes
 	CodeVersionNotPublished      Code = "version_not_published"

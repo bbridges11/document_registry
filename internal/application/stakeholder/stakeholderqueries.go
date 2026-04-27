@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/bbridges_11/document-registry/internal/ports/outbound"
-	"github.com/bbridges_11/document-registry/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
@@ -13,21 +12,21 @@ import (
 type QueryService struct {
 	repo         outbound.StakeholderRepository
 	documentRepo outbound.DocumentRepository
-	authz        outbound.AuthorizationService
-	userRepo     outbound.UserRepository
+
+	userRepo outbound.UserRepository
 }
 
 func NewQueryService(
 	repo outbound.StakeholderRepository,
 	documentRepo outbound.DocumentRepository,
-	authz outbound.AuthorizationService,
+
 	userRepo outbound.UserRepository,
 ) *QueryService {
 	return &QueryService{
 		repo:         repo,
 		documentRepo: documentRepo,
-		authz:        authz,
-		userRepo:     userRepo,
+
+		userRepo: userRepo,
 	}
 }
 
@@ -36,12 +35,6 @@ func (s *QueryService) ListStakeholders(ctx context.Context, query ListStakehold
 
 	// Validate document exists
 	try.To1(s.documentRepo.GetByID(ctx, query.DocumentID))
-
-	// Check authorization
-	allowed := try.To1(s.authz.CanAccessDocument(ctx, userID, query.DocumentID.String()))
-	if !allowed {
-		return nil, errors.ErrForbidden
-	}
 
 	stakeholders := try.To1(s.repo.ListByDocumentID(ctx, query.DocumentID))
 

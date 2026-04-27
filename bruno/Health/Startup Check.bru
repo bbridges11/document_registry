@@ -1,0 +1,19 @@
+meta {
+  name: Startup Check
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/health/startup
+  body: none
+  auth: none
+}
+
+docs {
+  Startup Health Check
+  
+  Same as readiness but with longer timeout.
+  Used during initial container startup.
+  Allows cold starts.
+}

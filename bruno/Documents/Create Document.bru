@@ -7,17 +7,52 @@ meta {
 post {
   url: {{base_url}}/documents
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "title": "API Integration Guide",
-    "type": "technical-documentation",
-    "description": "Comprehensive API guide"
+    "name": "API Gateway Pattern",
+    "description": "Standard API gateway pattern for microservices",
+    "document_type": "pattern",
+    "tags": ["api", "gateway", "microservices"],
+    "version": "1.0.0",
+    "content": "{{file_base64}}",
+    "metadata": {
+      "author": "Platform Team",
+      "category": "Architecture"
+    }
   }
+}
+
+script:pre-request {
+  const fs = require("fs");
+  const filePath = bru.getVar("file_path") || "./files/pattern-example.yaml";
+  const fileBuffer = fs.readFileSync(filePath);
+  const base64String = fileBuffer.toString("base64");
+  bru.setVar("file_base64", base64String);
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const data = res.body;
+    bru.setVar("document_id", data.document_id);
+    bru.setVar("version_id", data.version_id);
+  }
+}
+
+docs {
+  Create a new document with its first version.
+  
+  - Content must be base64 encoded
+  - Uses pre-request script to encode file
+  - Automatically saves document_id and version_id
+  
+  Document Types:
+  - pattern: Requires approval workflow and YAML validation
 }

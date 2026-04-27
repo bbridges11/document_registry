@@ -1,0 +1,21 @@
+meta {
+  name: Health Check (ALB)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/health
+  body: none
+  auth: none
+}
+
+docs {
+  ALB Target Group Health Check
+  
+  Checks critical dependencies:
+  - Postgres
+  - S3
+  
+  Returns 200 if healthy, 503 if unhealthy
+}

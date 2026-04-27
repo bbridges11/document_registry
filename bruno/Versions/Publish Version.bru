@@ -1,15 +1,31 @@
 meta {
   name: Publish Version
   type: http
-  seq: 9
+  seq: 7
 }
 
 post {
   url: {{base_url}}/versions/{{version_id}}/publish
-  body: none
-  auth: bearer
+  body: json
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "comment": "Publishing to production"
+  }
+}
+
+docs {
+  Publish an approved version.
+  
+  Workflow: APPROVED → PUBLISHED
+  
+  Only one version can be published at a time.
+  Publishing a new version auto-deprecates the previous published version.
 }

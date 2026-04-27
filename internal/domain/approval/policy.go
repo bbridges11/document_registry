@@ -9,7 +9,7 @@ type Policy interface {
 }
 
 // PatternPolicy defines approval requirements for "pattern" document type
-// Requires: 1 technical, 1 architect, 1 product
+// Requires: 1 technical, 1 architect
 type PatternPolicy struct{}
 
 func NewPatternPolicy() *PatternPolicy {
@@ -20,7 +20,6 @@ func (p *PatternPolicy) RequiredApprovals() map[ApprovalRole]int {
 	return map[ApprovalRole]int{
 		ApprovalRoleTechnical: 1,
 		ApprovalRoleArchitect: 1,
-		ApprovalRoleProduct:   1,
 	}
 }
 

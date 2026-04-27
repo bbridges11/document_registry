@@ -5,18 +5,33 @@ meta {
 }
 
 put {
-  url: {{base_url}}/users/{{user_id}}
+  url: {{base_url}}/users/{{created_user_id}}
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "name": "John Updated",
-    "email": "john.updated@example.com"
+    "name": "John Doe (Senior)",
+    "role": "architect"
   }
+}
+
+docs {
+  Update a user's name and/or role.
+  
+  Requires admin privileges (X-User-ID must be an admin).
+  
+  Updatable fields:
+  - name
+  - role
+  
+  Cannot update:
+  - email
+  - active status (use activate/deactivate endpoints)
 }

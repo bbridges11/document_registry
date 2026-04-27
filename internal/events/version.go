@@ -108,6 +108,30 @@ func (e VersionApproved) OccurredAt() time.Time {
 	return e.occurredAt
 }
 
+type VersionFullyApproved struct {
+	VersionID  string
+	DocumentID string
+	Version    string
+	occurredAt time.Time
+}
+
+func NewVersionFullyApproved(versionID, documentID, version string) VersionFullyApproved {
+	return VersionFullyApproved{
+		VersionID:  versionID,
+		DocumentID: documentID,
+		Version:    version,
+		occurredAt: time.Now().UTC(),
+	}
+}
+
+func (e VersionFullyApproved) Type() EventType {
+	return EventVersionFullyApproved
+}
+
+func (e VersionFullyApproved) OccurredAt() time.Time {
+	return e.occurredAt
+}
+
 type VersionRejected struct {
 	VersionID  string
 	DocumentID string

@@ -6,38 +6,37 @@ import (
 	"time"
 
 	"github.com/bbridges_11/document-registry/internal/ports/outbound"
-	"github.com/go-playground/validator/v10"
 	"github.com/lainio/err2"
-	"gopkg.in/yaml.v3"
 )
 
 const (
-	documentTypeDefinition = "definition"
-	validationTimeout      = 30 * time.Second
+	validationTimeout = 30 * time.Second
 )
 
-// DefinitionValidator validates definition YAML files
-type DefinitionValidator struct {
-	structValidator *validator.Validate
+// ContentValidator validates document content using a registry of type-specific validators
+type ContentValidator struct {
+	registry outbound.ValidatorRegistry
 }
 
-// NewDefinitionValidator creates a new definition validator
-func NewDefinitionValidator() *DefinitionValidator {
-	return &DefinitionValidator{
-		structValidator: validator.New(),
+// NewContentValidator creates a new content validator with a validator registry
+func NewContentValidator(registry outbound.ValidatorRegistry) *ContentValidator {
+	return &ContentValidator{
+		registry: registry,
 	}
 }
 
-// Validate validates definition content
-func (v *DefinitionValidator) Validate(ctx context.Context, req outbound.ValidationRequest) (result *outbound.ValidationResult, err error) {
+// Validate validates document content based on document type
+func (v *ContentValidator) Validate(ctx context.Context, req outbound.ValidationRequest) (result *outbound.ValidationResult, err error) {
 	defer err2.Handle(&err)
 
 	// Create timeout context
 	ctx, cancel := context.WithTimeout(ctx, validationTimeout)
 	defer cancel()
 
-	// Check if this validator handles this document type
-	if !v.ShouldValidate(req.DocumentType) {
+	// Check if validator exists for this document type
+	validator := v.registry.GetValidator(req.DocumentType)
+	if validator == nil {
+		// No validator registered = valid by default (document type doesn't require validation)
 		return &outbound.ValidationResult{
 			Valid:  true,
 			Issues: []outbound.ValidationIssue{},
@@ -50,7 +49,7 @@ func (v *DefinitionValidator) Validate(ctx context.Context, req outbound.Validat
 
 	// Run validation in goroutine to respect timeout
 	go func() {
-		res, err := v.doValidate(req)
+		res, err := validator.Validate(ctx, req.Content)
 		if err != nil {
 			errChan <- err
 			return
@@ -69,88 +68,7 @@ func (v *DefinitionValidator) Validate(ctx context.Context, req outbound.Validat
 	}
 }
 
-// doValidate performs the actual validation
-func (v *DefinitionValidator) doValidate(req outbound.ValidationRequest) (*outbound.ValidationResult, error) {
-	var issues []outbound.ValidationIssue
-
-	// Step 1: Unmarshal YAML with strict mode (disallow unknown fields)
-	var def DefinitionSchema
-	decoder := yaml.NewDecoder(nil)
-	decoder.KnownFields(true) // This will cause error on unknown fields
-
-	// Unmarshal
-	if err := yaml.Unmarshal(req.Content, &def); err != nil {
-		issues = append(issues, outbound.ValidationIssue{
-			Field:    "root",
-			Rule:     "yaml_unmarshal",
-			Message:  fmt.Sprintf("failed to parse YAML: %v", err),
-			Severity: "error",
-		})
-		return &outbound.ValidationResult{
-			Valid:  false,
-			Issues: issues,
-		}, nil
-	}
-
-	// Step 2: Struct tag validation
-	if err := v.structValidator.Struct(def); err != nil {
-		if validationErrs, ok := err.(validator.ValidationErrors); ok {
-			for _, e := range validationErrs {
-				issues = append(issues, outbound.ValidationIssue{
-					Field:    e.Namespace(),
-					Rule:     e.Tag(),
-					Message:  v.formatValidationError(e),
-					Severity: "error",
-				})
-			}
-		} else {
-			issues = append(issues, outbound.ValidationIssue{
-				Field:    "root",
-				Rule:     "struct_validation",
-				Message:  fmt.Sprintf("validation error: %v", err),
-				Severity: "error",
-			})
-		}
-	}
-
-	// Step 3: Semantic validation (only if no structural errors)
-	if len(issues) == 0 {
-		semanticIssues := validateSemantics(&def)
-		issues = append(issues, semanticIssues...)
-	}
-
-	// Determine if valid (no errors, warnings are ok)
-	valid := true
-	for _, issue := range issues {
-		if issue.Severity == "error" {
-			valid = false
-			break
-		}
-	}
-
-	return &outbound.ValidationResult{
-		Valid:  valid,
-		Issues: issues,
-	}, nil
-}
-
-// ShouldValidate determines if this validator handles the given document type
-func (v *DefinitionValidator) ShouldValidate(documentType string) bool {
-	return documentType == documentTypeDefinition
-}
-
-// formatValidationError converts validator errors to human-readable messages
-func (v *DefinitionValidator) formatValidationError(e validator.FieldError) string {
-	switch e.Tag() {
-	case "required":
-		return fmt.Sprintf("field '%s' is required", e.Field())
-	case "eq":
-		return fmt.Sprintf("field '%s' must equal '%s'", e.Field(), e.Param())
-	case "oneof":
-		return fmt.Sprintf("field '%s' must be one of: %s", e.Field(), e.Param())
-	case "min":
-		return fmt.Sprintf("field '%s' must have at least %s items", e.Field(), e.Param())
-	default:
-		return fmt.Sprintf("field '%s' failed validation '%s'", e.Field(), e.Tag())
-	}
+// ShouldValidate determines if a validator is registered for the given document type
+func (v *ContentValidator) ShouldValidate(documentType string) bool {
+	return v.registry.HasValidator(documentType)
 }

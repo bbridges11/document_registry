@@ -14,7 +14,7 @@ func CalculateContentHash(content []byte) string {
 
 // GenerateS3Key generates S3 key for document content
 // Format: {documentType}/{documentID}/{version}/content
-// Example: definition/550e8400-e29b-41d4-a716-446655440000/1.0.0/content
+// Example: pattern/550e8400-e29b-41d4-a716-446655440000/1.0.0/content
 func GenerateS3Key(documentType, documentID, version string) string {
 	return fmt.Sprintf("%s/%s/%s/content", documentType, documentID, version)
 }

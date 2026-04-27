@@ -1,0 +1,19 @@
+meta {
+  name: Liveness Probe
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/health/live
+  body: none
+  auth: none
+}
+
+docs {
+  Container Liveness Probe
+  
+  Always returns 200 if process is running.
+  No dependency checks.
+  Used for Docker HEALTHCHECK.
+}

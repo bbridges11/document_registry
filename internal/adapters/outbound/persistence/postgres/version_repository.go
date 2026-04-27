@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/bbridges_11/document-registry/internal/domain/shared"
 	"github.com/bbridges_11/document-registry/internal/domain/version"
 	"github.com/bbridges_11/document-registry/internal/domain/workflow"
 	dbPostgres "github.com/bbridges_11/document-registry/internal/platform/database/postgres"
@@ -29,13 +30,15 @@ func (r *VersionRepository) Save(ctx context.Context, ver *version.Version) (err
 	q := r.runner.GetQuerier(ctx)
 
 	metadataJSON := try.To1(json.Marshal(ver.Metadata()))
+	ref := ver.ContentRef()
 
 	query := `
-		INSERT INTO versions (id, document_id, version, status, content_s3_key, content_hash, metadata, created_by, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO versions (id, document_id, version, status, content_backend, content_location, content_hash, metadata, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (id) DO UPDATE SET
 			status = EXCLUDED.status,
-			content_s3_key = EXCLUDED.content_s3_key,
+			content_backend = EXCLUDED.content_backend,
+			content_location = EXCLUDED.content_location,
 			content_hash = EXCLUDED.content_hash,
 			metadata = EXCLUDED.metadata,
 			updated_at = EXCLUDED.updated_at
@@ -46,7 +49,8 @@ func (r *VersionRepository) Save(ctx context.Context, ver *version.Version) (err
 		ver.DocumentID(),
 		ver.Version().String(),
 		ver.Status(),
-		ver.ContentS3Key(),
+		string(ref.Backend()),
+		ref.Location(),
 		ver.ContentHash(),
 		metadataJSON,
 		ver.CreatedBy(),
@@ -63,26 +67,27 @@ func (r *VersionRepository) GetByID(ctx context.Context, id uuid.UUID) (ver *ver
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		SELECT id, document_id, version, status, content_s3_key, content_hash, metadata, created_by, created_at, updated_at
+		SELECT id, document_id, version, status, content_backend, content_location, content_hash, metadata, created_by, created_at, updated_at
 		FROM versions
 		WHERE id = $1
 	`
 
 	var (
-		verID        uuid.UUID
-		documentID   uuid.UUID
-		versionStr   string
-		status       workflow.Status
-		contentS3Key string
-		contentHash  string
-		metadataJSON []byte
-		createdBy    string
-		createdAt    time.Time
-		updatedAt    time.Time
+		verID           uuid.UUID
+		documentID      uuid.UUID
+		versionStr      string
+		status          workflow.Status
+		contentBackend  string
+		contentLocation string
+		contentHash     string
+		metadataJSON    []byte
+		createdBy       string
+		createdAt       time.Time
+		updatedAt       time.Time
 	)
 
 	err = q.QueryRow(ctx, query, id).Scan(
-		&verID, &documentID, &versionStr, &status, &contentS3Key, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt,
+		&verID, &documentID, &versionStr, &status, &contentBackend, &contentLocation, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, errors.ErrNotFound
@@ -92,7 +97,9 @@ func (r *VersionRepository) GetByID(ctx context.Context, id uuid.UUID) (ver *ver
 	var metadata map[string]any
 	try.To(json.Unmarshal(metadataJSON, &metadata))
 
-	return version.RehydrateVersion(verID, documentID, versionStr, status, contentS3Key, contentHash, createdBy, metadata, createdAt, updatedAt)
+	contentRef := try.To1(shared.NewContentReference(shared.StorageBackend(contentBackend), contentLocation))
+
+	return version.RehydrateVersion(verID, documentID, versionStr, status, contentRef, contentHash, createdBy, metadata, createdAt, updatedAt)
 }
 
 func (r *VersionRepository) GetByDocumentIDAndVersion(ctx context.Context, documentID uuid.UUID, versionStr string) (ver *version.Version, err error) {
@@ -101,26 +108,27 @@ func (r *VersionRepository) GetByDocumentIDAndVersion(ctx context.Context, docum
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		SELECT id, document_id, version, status, content_s3_key, content_hash, metadata, created_by, created_at, updated_at
+		SELECT id, document_id, version, status, content_backend, content_location, content_hash, metadata, created_by, created_at, updated_at
 		FROM versions
 		WHERE document_id = $1 AND version = $2
 	`
 
 	var (
-		verID        uuid.UUID
-		docID        uuid.UUID
-		version_     string
-		status       workflow.Status
-		contentS3Key string
-		contentHash  string
-		metadataJSON []byte
-		createdBy    string
-		createdAt    time.Time
-		updatedAt    time.Time
+		verID           uuid.UUID
+		docID           uuid.UUID
+		version_        string
+		status          workflow.Status
+		contentBackend  string
+		contentLocation string
+		contentHash     string
+		metadataJSON    []byte
+		createdBy       string
+		createdAt       time.Time
+		updatedAt       time.Time
 	)
 
 	err = q.QueryRow(ctx, query, documentID, versionStr).Scan(
-		&verID, &docID, &version_, &status, &contentS3Key, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt,
+		&verID, &docID, &version_, &status, &contentBackend, &contentLocation, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, errors.ErrNotFound
@@ -130,7 +138,9 @@ func (r *VersionRepository) GetByDocumentIDAndVersion(ctx context.Context, docum
 	var metadata map[string]any
 	try.To(json.Unmarshal(metadataJSON, &metadata))
 
-	return version.RehydrateVersion(verID, docID, version_, status, contentS3Key, contentHash, createdBy, metadata, createdAt, updatedAt)
+	contentRef := try.To1(shared.NewContentReference(shared.StorageBackend(contentBackend), contentLocation))
+
+	return version.RehydrateVersion(verID, docID, version_, status, contentRef, contentHash, createdBy, metadata, createdAt, updatedAt)
 }
 
 func (r *VersionRepository) ListByDocumentID(ctx context.Context, documentID uuid.UUID) (versions []*version.Version, err error) {
@@ -139,7 +149,7 @@ func (r *VersionRepository) ListByDocumentID(ctx context.Context, documentID uui
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		SELECT id, document_id, version, status, content_s3_key, content_hash, metadata, created_by, created_at, updated_at
+		SELECT id, document_id, version, status, content_backend, content_location, content_hash, metadata, created_by, created_at, updated_at
 		FROM versions
 		WHERE document_id = $1
 		ORDER BY created_at DESC
@@ -152,24 +162,27 @@ func (r *VersionRepository) ListByDocumentID(ctx context.Context, documentID uui
 
 	for rows.Next() {
 		var (
-			verID        uuid.UUID
-			docID        uuid.UUID
-			versionStr   string
-			status       workflow.Status
-			contentS3Key string
-			contentHash  string
-			metadataJSON []byte
-			createdBy    string
-			createdAt    time.Time
-			updatedAt    time.Time
+			verID           uuid.UUID
+			docID           uuid.UUID
+			versionStr      string
+			status          workflow.Status
+			contentBackend  string
+			contentLocation string
+			contentHash     string
+			metadataJSON    []byte
+			createdBy       string
+			createdAt       time.Time
+			updatedAt       time.Time
 		)
 
-		try.To(rows.Scan(&verID, &docID, &versionStr, &status, &contentS3Key, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt))
+		try.To(rows.Scan(&verID, &docID, &versionStr, &status, &contentBackend, &contentLocation, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt))
 
 		var metadata map[string]any
 		try.To(json.Unmarshal(metadataJSON, &metadata))
 
-		ver := try.To1(version.RehydrateVersion(verID, docID, versionStr, status, contentS3Key, contentHash, createdBy, metadata, createdAt, updatedAt))
+		contentRef := try.To1(shared.NewContentReference(shared.StorageBackend(contentBackend), contentLocation))
+
+		ver := try.To1(version.RehydrateVersion(verID, docID, versionStr, status, contentRef, contentHash, createdBy, metadata, createdAt, updatedAt))
 		versions = append(versions, ver)
 	}
 
@@ -184,7 +197,7 @@ func (r *VersionRepository) GetLatestByDocumentID(ctx context.Context, documentI
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		SELECT id, document_id, version, status, content_s3_key, content_hash, metadata, created_by, created_at, updated_at
+		SELECT id, document_id, version, status, content_backend, content_location, content_hash, metadata, created_by, created_at, updated_at
 		FROM versions
 		WHERE document_id = $1
 		ORDER BY created_at DESC
@@ -192,20 +205,21 @@ func (r *VersionRepository) GetLatestByDocumentID(ctx context.Context, documentI
 	`
 
 	var (
-		verID        uuid.UUID
-		docID        uuid.UUID
-		versionStr   string
-		status       workflow.Status
-		contentS3Key string
-		contentHash  string
-		metadataJSON []byte
-		createdBy    string
-		createdAt    time.Time
-		updatedAt    time.Time
+		verID           uuid.UUID
+		docID           uuid.UUID
+		versionStr      string
+		status          workflow.Status
+		contentBackend  string
+		contentLocation string
+		contentHash     string
+		metadataJSON    []byte
+		createdBy       string
+		createdAt       time.Time
+		updatedAt       time.Time
 	)
 
 	err = q.QueryRow(ctx, query, documentID).Scan(
-		&verID, &docID, &versionStr, &status, &contentS3Key, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt,
+		&verID, &docID, &versionStr, &status, &contentBackend, &contentLocation, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, errors.ErrNotFound
@@ -215,7 +229,9 @@ func (r *VersionRepository) GetLatestByDocumentID(ctx context.Context, documentI
 	var metadata map[string]any
 	try.To(json.Unmarshal(metadataJSON, &metadata))
 
-	return version.RehydrateVersion(verID, docID, versionStr, status, contentS3Key, contentHash, createdBy, metadata, createdAt, updatedAt)
+	contentRef := try.To1(shared.NewContentReference(shared.StorageBackend(contentBackend), contentLocation))
+
+	return version.RehydrateVersion(verID, docID, versionStr, status, contentRef, contentHash, createdBy, metadata, createdAt, updatedAt)
 }
 
 func (r *VersionRepository) GetPublishedByDocumentID(ctx context.Context, documentID uuid.UUID) (ver *version.Version, err error) {
@@ -224,27 +240,28 @@ func (r *VersionRepository) GetPublishedByDocumentID(ctx context.Context, docume
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		SELECT id, document_id, version, status, content_s3_key, content_hash, metadata, created_by, created_at, updated_at
+		SELECT id, document_id, version, status, content_backend, content_location, content_hash, metadata, created_by, created_at, updated_at
 		FROM versions
 		WHERE document_id = $1 AND status = $2
 		LIMIT 1
 	`
 
 	var (
-		verID        uuid.UUID
-		docID        uuid.UUID
-		versionStr   string
-		status       workflow.Status
-		contentS3Key string
-		contentHash  string
-		metadataJSON []byte
-		createdBy    string
-		createdAt    time.Time
-		updatedAt    time.Time
+		verID           uuid.UUID
+		docID           uuid.UUID
+		versionStr      string
+		status          workflow.Status
+		contentBackend  string
+		contentLocation string
+		contentHash     string
+		metadataJSON    []byte
+		createdBy       string
+		createdAt       time.Time
+		updatedAt       time.Time
 	)
 
 	err = q.QueryRow(ctx, query, documentID, workflow.StatusPublished).Scan(
-		&verID, &docID, &versionStr, &status, &contentS3Key, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt,
+		&verID, &docID, &versionStr, &status, &contentBackend, &contentLocation, &contentHash, &metadataJSON, &createdBy, &createdAt, &updatedAt,
 	)
 	if err == pgx.ErrNoRows {
 		return nil, errors.ErrNotFound
@@ -254,7 +271,9 @@ func (r *VersionRepository) GetPublishedByDocumentID(ctx context.Context, docume
 	var metadata map[string]any
 	try.To(json.Unmarshal(metadataJSON, &metadata))
 
-	return version.RehydrateVersion(verID, docID, versionStr, status, contentS3Key, contentHash, createdBy, metadata, createdAt, updatedAt)
+	contentRef := try.To1(shared.NewContentReference(shared.StorageBackend(contentBackend), contentLocation))
+
+	return version.RehydrateVersion(verID, docID, versionStr, status, contentRef, contentHash, createdBy, metadata, createdAt, updatedAt)
 }
 
 func (r *VersionRepository) HasPublishedVersion(ctx context.Context, documentID uuid.UUID) (hasPublished bool, err error) {

@@ -22,7 +22,6 @@ type CommandService struct {
 	versionRepo      outbound.VersionRepository
 	storageService   outbound.StorageService
 	txManager        outbound.TransactionManager
-	authz            outbound.AuthorizationService
 	eventBus         outbound.EventBus
 	contentValidator outbound.ContentValidator
 }
@@ -32,16 +31,15 @@ func NewCommandService(
 	versionRepo outbound.VersionRepository,
 	storageService outbound.StorageService,
 	txManager outbound.TransactionManager,
-	authz outbound.AuthorizationService,
 	eventBus outbound.EventBus,
 	contentValidator outbound.ContentValidator,
 ) *CommandService {
 	return &CommandService{
-		documentRepo:     documentRepo,
-		versionRepo:      versionRepo,
-		storageService:   storageService,
-		txManager:        txManager,
-		authz:            authz,
+		documentRepo:   documentRepo,
+		versionRepo:    versionRepo,
+		storageService: storageService,
+		txManager:      txManager,
+
 		eventBus:         eventBus,
 		contentValidator: contentValidator,
 	}
@@ -65,15 +63,18 @@ func (s *CommandService) CreateDocumentWithVersion(ctx context.Context, cmd Crea
 	// Step 2: Calculate content hash
 	contentHash := storage.CalculateContentHash(contentBytes)
 
-	// Step 3: VALIDATE CONTENT FIRST (before S3, before DB)
+	// Step 3: Parse and validate document type
+	documentType := try.To1(document.ParseDocumentType(cmd.DocumentType))
+
+	// Step 4: VALIDATE CONTENT FIRST (before storage, before DB)
 	var validationResult *outbound.ValidationResult
-	if s.contentValidator.ShouldValidate(cmd.DocumentType) {
+	if documentType.RequiresValidation() {
 		validationResult = try.To1(s.contentValidator.Validate(ctx, outbound.ValidationRequest{
 			DocumentType: cmd.DocumentType,
 			Content:      contentBytes,
 		}))
 
-		// If validation failed, return immediately - NO S3 upload, NO DB transaction
+		// If validation failed, return immediately - NO storage upload, NO DB transaction
 		if !validationResult.Valid {
 			return nil, nil, validationResult, errors.New(
 				errors.CodeValidationFailed,
@@ -82,22 +83,26 @@ func (s *CommandService) CreateDocumentWithVersion(ctx context.Context, cmd Crea
 		}
 	}
 
-	// Step 4: Create document aggregate (generates UUID)
-	doc = try.To1(document.NewDocument(cmd.Name, cmd.Description, cmd.DocumentType, cmd.CreatedBy, cmd.Tags))
+	// Step 5: Create document aggregate (generates UUID)
+	doc = try.To1(document.NewDocument(cmd.Name, cmd.Description, documentType, cmd.CreatedBy, cmd.Tags))
 
-	// Step 5: Generate S3 key using new format: {documentType}/{documentID}/{version}/content
-	s3Key := storage.GenerateS3Key(cmd.DocumentType, doc.ID().String(), cmd.Version)
+	// Step 6: Generate storage key using format: {documentType}/{documentID}/{version}/content
+	storageKey := storage.GenerateS3Key(cmd.DocumentType, doc.ID().String(), cmd.Version)
 
-	// Step 6: Upload validated content to S3
-	try.To(s.storageService.Upload(ctx, s3Key, bytes.NewReader(contentBytes)))
+	// Step 6: Upload validated content to storage (using S3 backend by default)
+	contentRef := try.To1(s.storageService.Upload(ctx, outbound.StorageRequest{
+		Backend: shared.StorageBackendS3,
+		Key:     storageKey,
+		Content: bytes.NewReader(contentBytes),
+	}))
 
 	// Step 7: Atomic DB transaction
 	err = s.txManager.WithinTransaction(ctx, func(ctx context.Context) error {
 		// Save document
 		try.To(s.documentRepo.Save(ctx, doc))
 
-		// Create version aggregate with calculated hash
-		ver = try.To1(version.NewVersion(doc.ID(), cmd.Version, s3Key, contentHash, cmd.CreatedBy, cmd.Metadata))
+		// Create version aggregate with content reference and calculated hash
+		ver = try.To1(version.NewVersion(doc.ID(), cmd.Version, contentRef, contentHash, cmd.CreatedBy, cmd.Metadata))
 
 		// Save version
 		try.To(s.versionRepo.Save(ctx, ver))
@@ -105,9 +110,9 @@ func (s *CommandService) CreateDocumentWithVersion(ctx context.Context, cmd Crea
 		return nil
 	})
 
-	// Step 8: Cleanup S3 on transaction failure
+	// Step 8: Cleanup storage on transaction failure
 	if err != nil {
-		_ = s.storageService.Delete(ctx, s3Key)
+		_ = s.storageService.Delete(ctx, contentRef)
 		return nil, nil, nil, errors.Wrap(errors.CodeInternal, "failed to create document with version", err)
 	}
 
@@ -125,12 +130,6 @@ func (s *CommandService) CreateDocumentWithVersion(ctx context.Context, cmd Crea
 
 func (s *CommandService) UpdateDocument(ctx context.Context, cmd UpdateDocumentCommand) (err error) {
 	defer err2.Handle(&err)
-
-	// Check authorization
-	allowed := try.To1(s.authz.CanAccessDocument(ctx, cmd.UpdatedBy, cmd.ID.String()))
-	if !allowed {
-		return errors.ErrForbidden
-	}
 
 	doc := try.To1(s.documentRepo.GetByID(ctx, cmd.ID))
 	try.To(doc.Update(cmd.Name, cmd.Description, cmd.Tags, cmd.UpdatedBy))

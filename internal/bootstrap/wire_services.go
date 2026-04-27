@@ -10,6 +10,7 @@ import (
 	"github.com/bbridges_11/document-registry/internal/adapters/inbound/http/stakeholder"
 	validationhttp "github.com/bbridges_11/document-registry/internal/adapters/inbound/http/validation"
 	"github.com/bbridges_11/document-registry/internal/adapters/inbound/http/version"
+	"github.com/bbridges_11/document-registry/internal/adapters/outbound/validation"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/validation/inprocess"
 	"github.com/bbridges_11/document-registry/internal/domain/workflow"
 	"github.com/bbridges_11/document-registry/internal/platform/config"
@@ -45,22 +46,22 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 
 	registerEventHandlers(infra, log)
 
-	// Create content validator
-	definitionValidator := inprocess.NewDefinitionValidator()
+	// Create validation registry with validators
+	patternValidator := inprocess.NewPatternValidator()
+	validatorRegistry := validation.NewRegistry(patternValidator)
+	contentValidator := inprocess.NewContentValidator(validatorRegistry)
 
 	documentCommandService := appDocument.NewCommandService(
 		infra.DocumentRepo,
 		infra.VersionRepo,
 		infra.StorageService,
 		infra.Runner,
-		infra.AuthzService,
 		infra.EventBus,
-		definitionValidator,
+		contentValidator,
 	)
 	documentQueryService := appDocument.NewQueryService(
 		infra.DocumentRepo,
 		infra.VersionRepo,
-		infra.AuthzService,
 	)
 	documentService := appDocument.NewService(documentCommandService, documentQueryService)
 
@@ -69,20 +70,20 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 		infra.DocumentRepo,
 		infra.ApprovalRepo,
 		infra.DeprecationRepo,
+		infra.PublicationRepo,
 		infra.StorageService,
+		infra.PublisherService,
 		infra.Runner,
-		infra.AuthzService,
 		infra.UserRepo,
 		infra.EventBus,
 		workflowFactory,
 		policyFactory,
-		definitionValidator,
+		contentValidator,
 	)
 	versionQueryService := appVersion.NewQueryService(
 		infra.VersionRepo,
 		infra.DocumentRepo,
 		infra.ApprovalRepo,
-		infra.AuthzService,
 		infra.UserRepo,
 		workflowFactory,
 		policyFactory,
@@ -92,25 +93,16 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 	stakeholderCommandService := appStakeholder.NewCommandService(
 		infra.StakeholderRepo,
 		infra.DocumentRepo,
-		infra.AuthzService,
 		infra.UserRepo,
 		infra.EventBus,
 	)
 	stakeholderQueryService := appStakeholder.NewQueryService(
 		infra.StakeholderRepo,
 		infra.DocumentRepo,
-		infra.AuthzService,
 		infra.UserRepo,
 	)
 	stakeholderService := appStakeholder.NewService(stakeholderCommandService, stakeholderQueryService)
 
-	approvalCommandService := appApproval.NewCommandService(
-		infra.ApprovalRepo,
-		infra.VersionRepo,
-		infra.DocumentRepo,
-		infra.UserRepo,
-		policyFactory,
-	)
 	approvalQueryService := appApproval.NewQueryService(
 		infra.ApprovalRepo,
 		infra.VersionRepo,
@@ -118,14 +110,13 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 		infra.UserRepo,
 		policyFactory,
 	)
-	approvalService := appApproval.NewService(approvalCommandService, approvalQueryService)
+	approvalService := appApproval.NewService(approvalQueryService)
 
 	deprecationCommandService := appDeprecation.NewCommandService(
 		infra.DeprecationRepo,
 		infra.VersionRepo,
 		infra.Runner,
 		infra.EventBus,
-		infra.AuthzService,
 	)
 	deprecationService := appDeprecation.NewService(deprecationCommandService)
 
@@ -133,10 +124,10 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 	userQueries := appUser.NewUserQueryService(infra.UserRepo, log)
 
 	// Create validation service
-	validationService := appValidation.NewService(definitionValidator)
+	validationService := appValidation.NewService(contentValidator)
 
 	return &httpHandlers{
-		Health:      health.NewHandler(infra.Runner, infra.AuthzService, infra.UserService, log),
+		Health:      health.NewHandler(infra.Runner, infra.S3Client, infra.SNSClient, infra.AWSConfig, log),
 		Document:    document.NewHandler(documentService),
 		Version:     version.NewHandler(versionService),
 		Stakeholder: stakeholder.NewHandler(stakeholderService),

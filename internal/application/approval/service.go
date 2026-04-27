@@ -8,19 +8,13 @@ import (
 )
 
 type ServiceFacade struct {
-	commands *CommandService
-	queries  *QueryService
+	queries *QueryService
 }
 
-func NewService(commands *CommandService, queries *QueryService) *ServiceFacade {
-	return &ServiceFacade{commands: commands, queries: queries}
+func NewService(queries *QueryService) *ServiceFacade {
+	return &ServiceFacade{queries: queries}
 }
-func (s *ServiceFacade) Grant(ctx context.Context, input GrantInput) error {
-	return s.commands.GrantApproval(ctx, GrantApprovalCommand{VersionID: input.VersionID, UserID: input.UserID, Role: domainApproval.ApprovalRole(input.Role), Comment: input.Comment})
-}
-func (s *ServiceFacade) Revoke(ctx context.Context, input RevokeInput) error {
-	return s.commands.RevokeApproval(ctx, RevokeApprovalCommand{VersionID: input.VersionID, UserID: input.UserID})
-}
+
 func toView(dto *ApprovalDTO) View {
 	return View{ID: dto.ID, VersionID: dto.VersionID, UserID: dto.UserID, UserName: dto.UserName, Role: dto.Role.String(), Approved: dto.Approved, Comment: dto.Comment, CreatedAt: dto.CreatedAt}
 }

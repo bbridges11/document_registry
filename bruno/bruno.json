@@ -1,5 +1,16 @@
-{
-  "version": "1",
-  "name": "Document Registry API",
-  "type": "collection"
+meta {
+  name: Document Registry API
+  type: collection
+  version: 1.0.0
+}
+
+vars {
+  base_url: http://localhost:8080
+  user_id: user-123
+  document_id: 
+  version_id: 
+  stakeholder_id: 
+  approval_id: 
+  deprecation_id: 
+  created_user_id: 
 }

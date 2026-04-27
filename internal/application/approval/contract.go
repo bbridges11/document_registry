@@ -39,8 +39,6 @@ type SummaryView struct {
 }
 
 type Service interface {
-	Grant(ctx context.Context, input GrantInput) error
-	Revoke(ctx context.Context, input RevokeInput) error
 	Get(ctx context.Context, input GetInput) (View, error)
 	ListByVersion(ctx context.Context, input ListByVersionInput) ([]View, error)
 	GetSummary(ctx context.Context, versionID uuid.UUID) (SummaryView, error)

@@ -7,9 +7,15 @@ meta {
 get {
   url: {{base_url}}/documents/{{document_id}}/stakeholders
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  List all stakeholders for a document.
+  
+  Returns user IDs and their roles.
 }

@@ -1,7 +1,8 @@
 package version
 
 import (
-	"mime/multipart"
+	"bytes"
+	"encoding/base64"
 	"net/http"
 
 	httpshared "github.com/bbridges_11/document-registry/internal/adapters/inbound/http/shared"
@@ -33,6 +34,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, mw *MiddlewareConfig) {
 			protectedMW = append(protectedMW, mw.Authorization)
 		}
 	}
+
 	e.POST("/documents/:documentId/versions", h.CreateVersion, standardMW...)
 	e.GET("/documents/:documentId/versions", h.ListVersionsByDocument, standardMW...)
 	e.GET("/versions/:id", h.GetVersion, standardMW...)
@@ -46,22 +48,6 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, mw *MiddlewareConfig) {
 	e.GET("/versions/:id/approvals", h.GetVersionApprovals, standardMW...)
 }
 
-func mustString(values map[string][]string, key string) string {
-	if v := values[key]; len(v) > 0 {
-		return v[0]
-	}
-	return ""
-}
-func parseMetadata(values map[string][]string) map[string]any {
-	metadata := map[string]any{}
-	if mv, ok := values["metadata"]; ok {
-		for i := 0; i+1 < len(mv); i += 2 {
-			metadata[mv[i]] = mv[i+1]
-		}
-	}
-	return metadata
-}
-func fileFromForm(files []*multipart.FileHeader) (multipart.File, error) { return files[0].Open() }
 func actor(c echo.Context) (appver.Actor, error) {
 	a, err := httpshared.ActorFromEcho(c)
 	return appver.Actor{UserID: a.UserID}, err
@@ -72,27 +58,39 @@ func (h *Handler) CreateVersion(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid document ID"})
 	}
+
 	a, err := actor(c)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
 	}
-	form, err := c.MultipartForm()
+
+	// Bind JSON request
+	var req CreateVersionRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request"})
+	}
+
+	// Decode base64 content
+	decodedContent, err := base64.StdEncoding.DecodeString(req.Content)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid multipart form"})
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "content must be valid base64 encoded"})
 	}
-	files := form.File["content"]
-	if len(files) == 0 {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "content file required"})
-	}
-	file, err := fileFromForm(files)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "failed to open content file"})
-	}
-	defer file.Close()
-	output, err := h.versions.Create(c.Request().Context(), appver.CreateInput{Actor: a, DocumentID: documentID, Version: mustString(form.Value, "version"), Content: file, Metadata: parseMetadata(form.Value)})
+
+	// Convert to io.Reader for application input
+	contentReader := bytes.NewReader(decodedContent)
+
+	// Call application service
+	output, err := h.versions.Create(c.Request().Context(), appver.CreateInput{
+		Actor:      a,
+		DocumentID: documentID,
+		Version:    req.Version,
+		Content:    contentReader,
+		Metadata:   req.Metadata,
+	})
 	if err != nil {
 		return handleError(c, err)
 	}
+
 	return c.JSON(http.StatusCreated, toCreateVersionResponse(output))
 }
 func (h *Handler) GetVersion(c echo.Context) error {
@@ -223,7 +221,17 @@ func (h *Handler) PublishVersion(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
 	}
-	if err := h.versions.Publish(c.Request().Context(), appver.PublishInput{Actor: a, ID: id}); err != nil {
+
+	var req PublishVersionRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request"})
+	}
+
+	if err := h.versions.Publish(c.Request().Context(), appver.PublishInput{
+		Actor:       a,
+		ID:          id,
+		Destination: req.Destination,
+	}); err != nil {
 		return handleError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)

@@ -3,6 +3,7 @@ package version
 import (
 	"time"
 
+	"github.com/bbridges_11/document-registry/internal/domain/approval"
 	"github.com/bbridges_11/document-registry/internal/domain/shared"
 	"github.com/bbridges_11/document-registry/internal/domain/workflow"
 	"github.com/bbridges_11/document-registry/internal/events"
@@ -12,27 +13,27 @@ import (
 
 type Version struct {
 	shared.AggregateRoot
-	id           uuid.UUID
-	documentID   uuid.UUID
-	version      *SemanticVersion
-	status       workflow.Status
-	contentS3Key string
-	contentHash  string
-	metadata     map[string]any
-	createdBy    string
-	createdAt    time.Time
-	updatedAt    time.Time
+	id          uuid.UUID
+	documentID  uuid.UUID
+	version     *SemanticVersion
+	status      workflow.Status
+	contentRef  *shared.ContentReference
+	contentHash string
+	metadata    map[string]any
+	createdBy   string
+	createdAt   time.Time
+	updatedAt   time.Time
 }
 
-func NewVersion(documentID uuid.UUID, versionStr string, contentS3Key, contentHash, createdBy string, metadata map[string]any) (*Version, error) {
+func NewVersion(documentID uuid.UUID, versionStr string, contentRef *shared.ContentReference, contentHash, createdBy string, metadata map[string]any) (*Version, error) {
 	if documentID == uuid.Nil {
 		return nil, errors.New(errors.CodeInvalidArgument, "document ID is required")
 	}
 	if createdBy == "" {
 		return nil, errors.New(errors.CodeInvalidArgument, "created by is required")
 	}
-	if contentS3Key == "" {
-		return nil, errors.New(errors.CodeInvalidArgument, "content S3 key is required")
+	if contentRef == nil {
+		return nil, errors.New(errors.CodeInvalidArgument, "content reference is required")
 	}
 	if contentHash == "" {
 		return nil, errors.New(errors.CodeInvalidArgument, "content hash is required")
@@ -45,16 +46,16 @@ func NewVersion(documentID uuid.UUID, versionStr string, contentS3Key, contentHa
 
 	now := time.Now().UTC()
 	v := &Version{
-		id:           uuid.New(),
-		documentID:   documentID,
-		version:      semVer,
-		status:       workflow.StatusDraft,
-		contentS3Key: contentS3Key,
-		contentHash:  contentHash,
-		metadata:     metadata,
-		createdBy:    createdBy,
-		createdAt:    now,
-		updatedAt:    now,
+		id:          uuid.New(),
+		documentID:  documentID,
+		version:     semVer,
+		status:      workflow.StatusDraft,
+		contentRef:  contentRef,
+		contentHash: contentHash,
+		metadata:    metadata,
+		createdBy:   createdBy,
+		createdAt:   now,
+		updatedAt:   now,
 	}
 
 	v.AggregateRoot.AddEvent(events.NewVersionCreated(
@@ -67,32 +68,32 @@ func NewVersion(documentID uuid.UUID, versionStr string, contentS3Key, contentHa
 	return v, nil
 }
 
-func RehydrateVersion(id, documentID uuid.UUID, versionStr string, status workflow.Status, contentS3Key, contentHash, createdBy string, metadata map[string]any, createdAt, updatedAt time.Time) (*Version, error) {
+func RehydrateVersion(id, documentID uuid.UUID, versionStr string, status workflow.Status, contentRef *shared.ContentReference, contentHash, createdBy string, metadata map[string]any, createdAt, updatedAt time.Time) (*Version, error) {
 	semVer, err := NewSemanticVersion(versionStr)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Version{
-		id:           id,
-		documentID:   documentID,
-		version:      semVer,
-		status:       status,
-		contentS3Key: contentS3Key,
-		contentHash:  contentHash,
-		metadata:     metadata,
-		createdBy:    createdBy,
-		createdAt:    createdAt,
-		updatedAt:    updatedAt,
+		id:          id,
+		documentID:  documentID,
+		version:     semVer,
+		status:      status,
+		contentRef:  contentRef,
+		contentHash: contentHash,
+		metadata:    metadata,
+		createdBy:   createdBy,
+		createdAt:   createdAt,
+		updatedAt:   updatedAt,
 	}, nil
 }
 
-func (v *Version) Update(contentS3Key, contentHash string, metadata map[string]any) error {
+func (v *Version) Update(contentRef *shared.ContentReference, contentHash string, metadata map[string]any) error {
 	if !v.status.IsEditable() {
 		return errors.New(errors.CodePrecondition, "version is not editable")
 	}
 
-	v.contentS3Key = contentS3Key
+	v.contentRef = contentRef
 	v.contentHash = contentHash
 	v.metadata = metadata
 	v.updatedAt = time.Now().UTC()
@@ -215,8 +216,8 @@ func (v *Version) Status() workflow.Status {
 	return v.status
 }
 
-func (v *Version) ContentS3Key() string {
-	return v.contentS3Key
+func (v *Version) ContentRef() *shared.ContentReference {
+	return v.contentRef
 }
 
 func (v *Version) ContentHash() string {
@@ -301,4 +302,12 @@ func (v *Version) IsDeprecating() bool {
 // CanBeDeprecated returns true if version can be deprecated (is PUBLISHED)
 func (v *Version) CanBeDeprecated() bool {
 	return v.status.CanBeDeprecated()
+}
+
+// IsPolicySatisfied checks if the version's approvals satisfy the given policy
+// This is used to determine when to emit VersionFullyApproved event
+func (v *Version) IsPolicySatisfied(policy interface {
+	IsSatisfied([]*approval.Approval) bool
+}, approvals []*approval.Approval) bool {
+	return policy.IsSatisfied(approvals)
 }

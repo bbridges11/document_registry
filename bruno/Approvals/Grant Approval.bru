@@ -7,16 +7,35 @@ meta {
 post {
   url: {{base_url}}/versions/{{version_id}}/approvals/grant
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "user_id": "{{user_id}}",
-    "role": "technical-reviewer"
+    "role": "engineer",
+    "comment": "LGTM - architecture looks good"
   }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    console.log("Approval granted successfully");
+  }
+}
+
+docs {
+  Grant an approval for a version.
+  
+  Roles:
+  - engineer
+  - architect
+  - product_manager
+  
+  Each user can only approve once per role.
+  Multiple approvals may be required based on approval policy.
 }

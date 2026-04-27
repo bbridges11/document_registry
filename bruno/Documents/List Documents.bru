@@ -1,22 +1,28 @@
 meta {
   name: List Documents
   type: http
-  seq: 2
+  seq: 3
 }
 
 get {
-  url: {{base_url}}/documents?page=1&limit=20
+  url: {{base_url}}/documents?limit=20&offset=0
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
 }
 
 params:query {
-  page: 1
   limit: 20
-  ~type: 
-  ~search: 
+  offset: 0
+}
+
+docs {
+  List all documents with pagination.
+  
+  Query Parameters:
+  - limit: Number of results (default: 20)
+  - offset: Pagination offset (default: 0)
 }

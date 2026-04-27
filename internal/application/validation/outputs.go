@@ -1,7 +1,7 @@
 package validation
 
-// ValidateDefinitionOutput contains the validation result
-type ValidateDefinitionOutput struct {
+// ValidateContentOutput contains the validation result
+type ValidateContentOutput struct {
 	Valid  bool
 	Issues []ValidationIssue
 }

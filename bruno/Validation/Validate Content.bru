@@ -1,0 +1,42 @@
+meta {
+  name: Validate Content
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/validation/content
+  body: json
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "content": "{{file_base64}}",
+    "document_type": "pattern"
+  }
+}
+
+script:pre-request {
+  const fs = require("fs");
+  const filePath = bru.getVar("file_path") || "./files/pattern-example.yaml";
+  const fileBuffer = fs.readFileSync(filePath);
+  const base64String = fileBuffer.toString("base64");
+  bru.setVar("file_base64", base64String);
+}
+
+docs {
+  Validate document content before creating/updating.
+  
+  Document Types:
+  - pattern: YAML schema validation
+  
+  Returns:
+  - valid: true/false
+  - issues: Array of validation errors/warnings
+}

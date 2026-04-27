@@ -33,22 +33,6 @@ services:
       - localstack-data:/tmp/localstack
       - /var/run/docker.sock:/var/run/docker.sock
 
-  openfga:
-    image: openfga/openfga:latest
-    container_name: document-registry-openfga
-    command: run
-    environment:
-      OPENFGA_DATASTORE_ENGINE: memory
-    ports:
-      - "8080:8080"
-      - "8081:8081"
-      - "3000:3000"
-    healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=:8081"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 volumes:
   postgres-data:
   localstack-data:

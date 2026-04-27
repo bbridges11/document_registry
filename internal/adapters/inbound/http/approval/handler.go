@@ -3,7 +3,6 @@ package approval
 import (
 	"net/http"
 
-	httpshared "github.com/bbridges_11/document-registry/internal/adapters/inbound/http/shared"
 	appapproval "github.com/bbridges_11/document-registry/internal/application/approval"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -20,47 +19,11 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, mw *MiddlewareConfig) {
 	if mw != nil && mw.UserValidation != nil {
 		middlewares = append(middlewares, mw.UserValidation)
 	}
-	e.POST("/versions/:versionId/approvals/grant", h.GrantApproval, middlewares...)
-	e.POST("/versions/:versionId/approvals/revoke/:userId", h.RevokeApproval, middlewares...)
 	e.GET("/approvals/:id", h.GetApproval, middlewares...)
 	e.GET("/versions/:versionId/approvals/list", h.ListApprovalsByVersion, middlewares...)
 	e.GET("/versions/:versionId/approvals/summary", h.GetApprovalSummary, middlewares...)
 }
-func (h *Handler) GrantApproval(c echo.Context) error {
-	versionID, err := uuid.Parse(c.Param("versionId"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid version ID"})
-	}
-	actor, err := httpshared.ActorFromEcho(c)
-	if err != nil {
-		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
-	}
-	var req GrantApprovalRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request"})
-	}
-	if err := h.approvals.Grant(c.Request().Context(), appapproval.GrantInput{VersionID: versionID, UserID: actor.UserID, Role: req.Role, Comment: req.Comment}); err != nil {
-		return handleError(c, err)
-	}
-	return c.NoContent(http.StatusCreated)
-}
-func (h *Handler) RevokeApproval(c echo.Context) error {
-	versionID, err := uuid.Parse(c.Param("versionId"))
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid version ID"})
-	}
-	targetUserID := c.Param("userId")
-	if targetUserID == "" {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "user ID required"})
-	}
-	if _, err := httpshared.ActorFromEcho(c); err != nil {
-		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
-	}
-	if err := h.approvals.Revoke(c.Request().Context(), appapproval.RevokeInput{VersionID: versionID, UserID: targetUserID}); err != nil {
-		return handleError(c, err)
-	}
-	return c.NoContent(http.StatusNoContent)
-}
+
 func (h *Handler) GetApproval(c echo.Context) error {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

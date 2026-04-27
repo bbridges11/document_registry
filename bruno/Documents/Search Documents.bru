@@ -1,22 +1,40 @@
 meta {
   name: Search Documents
   type: http
-  seq: 5
+  seq: 4
 }
 
 get {
-  url: {{base_url}}/documents/search?q=api&type=technical-documentation
+  url: {{base_url}}/documents/search
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
 }
 
 params:query {
-  q: api
-  ~type: 
-  ~page: 1
+  ~query: gateway
+  ~name: API
+  ~tags: api,microservices
+  ~document_type: pattern
+  ~my_documents: true
   ~limit: 20
+  ~offset: 0
+}
+
+docs {
+  Search documents with filters.
+  
+  Query Parameters:
+  - query: Full-text search
+  - name: Filter by name
+  - tags: Filter by tags (comma-separated)
+  - document_type: Filter by type (pattern)
+  - my_documents: Show only user's documents
+  - limit: Results per page
+  - offset: Pagination offset
+  
+  Remove ~ prefix to enable a filter.
 }

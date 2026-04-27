@@ -15,24 +15,24 @@ import (
 type CommandService struct {
 	repo         outbound.StakeholderRepository
 	documentRepo outbound.DocumentRepository
-	authz        outbound.AuthorizationService
-	userRepo     outbound.UserRepository
-	eventBus     outbound.EventBus
+
+	userRepo outbound.UserRepository
+	eventBus outbound.EventBus
 }
 
 func NewCommandService(
 	repo outbound.StakeholderRepository,
 	documentRepo outbound.DocumentRepository,
-	authz outbound.AuthorizationService,
+
 	userRepo outbound.UserRepository,
 	eventBus outbound.EventBus,
 ) *CommandService {
 	return &CommandService{
 		repo:         repo,
 		documentRepo: documentRepo,
-		authz:        authz,
-		userRepo:     userRepo,
-		eventBus:     eventBus,
+
+		userRepo: userRepo,
+		eventBus: eventBus,
 	}
 }
 
@@ -41,12 +41,6 @@ func (s *CommandService) AddStakeholder(ctx context.Context, cmd AddStakeholderC
 
 	// Validate document exists
 	try.To1(s.documentRepo.GetByID(ctx, cmd.DocumentID))
-
-	// Check authorization
-	allowed := try.To1(s.authz.CanModifyStakeholders(ctx, cmd.AddedBy, cmd.DocumentID.String()))
-	if !allowed {
-		return errors.ErrForbidden
-	}
 
 	// Validate user exists
 	userID := try.To1(uuid.Parse(cmd.UserID))
@@ -81,12 +75,6 @@ func (s *CommandService) RemoveStakeholder(ctx context.Context, cmd RemoveStakeh
 
 	// Validate document exists
 	try.To1(s.documentRepo.GetByID(ctx, cmd.DocumentID))
-
-	// Check authorization
-	allowed := try.To1(s.authz.CanModifyStakeholders(ctx, cmd.RemovedBy, cmd.DocumentID.String()))
-	if !allowed {
-		return errors.ErrForbidden
-	}
 
 	// Get stakeholder to find their role
 	sh := try.To1(s.repo.GetByDocumentIDAndUserID(ctx, cmd.DocumentID, cmd.UserID))

@@ -1,7 +1,8 @@
 package document
 
 import (
-	"mime/multipart"
+	"bytes"
+	"encoding/base64"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,18 +34,12 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, mw *MiddlewareConfig) {
 			middlewares = append(middlewares, mw.RateLimit)
 		}
 	}
+
 	e.POST("/documents", h.CreateDocument, middlewares...)
 	e.GET("/documents/search", h.SearchDocuments, middlewares...)
 	e.GET("/documents/:id", h.GetDocument, middlewares...)
 	e.GET("/documents", h.ListDocuments, middlewares...)
 	e.PUT("/documents/:id", h.UpdateDocument, middlewares...)
-}
-
-func mustString(values map[string][]string, key string) string {
-	if v := values[key]; len(v) > 0 {
-		return v[0]
-	}
-	return ""
 }
 
 func parseIntParam(c echo.Context, key string, defaultValue int) int {
@@ -85,37 +80,39 @@ func parseTime(s string) (time.Time, error) {
 	return time.Time{}, errors.New(errors.CodeInvalidArgument, "invalid time format")
 }
 
-func parseMetadata(values map[string][]string) map[string]any {
-	metadata := map[string]any{}
-	if mv, ok := values["metadata"]; ok {
-		for i := 0; i+1 < len(mv); i += 2 {
-			metadata[mv[i]] = mv[i+1]
-		}
-	}
-	return metadata
-}
-func fileFromForm(files []*multipart.FileHeader) (multipart.File, error) { return files[0].Open() }
-
 func (h *Handler) CreateDocument(c echo.Context) error {
 	actor, err := httpshared.ActorFromEcho(c)
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
 	}
-	form, err := c.MultipartForm()
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid multipart form"})
-	}
-	files := form.File["content"]
-	if len(files) == 0 {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "content file required"})
-	}
-	file, err := fileFromForm(files)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "failed to open content file"})
-	}
-	defer file.Close()
 
-	input := appdoc.CreateInput{Actor: appdoc.Actor{UserID: actor.UserID}, Name: mustString(form.Value, "name"), Description: mustString(form.Value, "description"), Tags: form.Value["tags"], DocumentType: mustString(form.Value, "document_type"), Version: mustString(form.Value, "version"), Content: file, Metadata: parseMetadata(form.Value)}
+	// Bind JSON request
+	var req CreateDocumentRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request"})
+	}
+
+	// Decode base64 content
+	decodedContent, err := base64.StdEncoding.DecodeString(req.Content)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "content must be valid base64 encoded"})
+	}
+
+	// Convert to io.Reader for application input
+	contentReader := bytes.NewReader(decodedContent)
+
+	// Call application service
+	input := appdoc.CreateInput{
+		Actor:        appdoc.Actor{UserID: actor.UserID},
+		Name:         req.Name,
+		Description:  req.Description,
+		Tags:         req.Tags,
+		DocumentType: req.DocumentType,
+		Version:      req.Version,
+		Content:      contentReader,
+		Metadata:     req.Metadata,
+	}
+
 	out, err := h.documents.Create(c.Request().Context(), input)
 	if err != nil {
 		return handleError(c, err)

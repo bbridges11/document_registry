@@ -5,18 +5,24 @@ meta {
 }
 
 post {
-  url: {{base_url}}/versions/{{version_id}}/deprecation/approve
+  url: {{base_url}}/deprecations/{{deprecation_id}}/approve
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "role": "deprecation-approver",
-    "comment": "Approved"
+    "comment": "Approved - migration path is clear"
   }
+}
+
+docs {
+  Approve a deprecation request.
+  
+  Version moves to DEPRECATED status.
 }

@@ -7,17 +7,37 @@ meta {
 post {
   url: {{base_url}}/users
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  Content-Type: application/json
 }
 
 body:json {
   {
     "email": "john.doe@example.com",
     "name": "John Doe",
-    "role": "user"
+    "role": "engineer"
   }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const data = res.body;
+    bru.setVar("created_user_id", data.id);
+  }
+}
+
+docs {
+  Create a new user.
+  
+  Roles:
+  - admin
+  - engineer
+  - architect
+  - product_manager
+  - viewer
+  
+  Auto-saves created_user_id for use in other requests.
 }

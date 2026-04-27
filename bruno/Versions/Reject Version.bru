@@ -1,21 +1,30 @@
 meta {
   name: Reject Version
   type: http
-  seq: 8
+  seq: 6
 }
 
 post {
   url: {{base_url}}/versions/{{version_id}}/reject
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "reason": "Needs revision"
+    "comment": "Needs more detail in the authentication section",
+    "role": "architect"
   }
+}
+
+docs {
+  Reject a version.
+  
+  Version moves to REJECTED status.
+  Can be resubmitted after fixes.
 }

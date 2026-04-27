@@ -1,15 +1,25 @@
 meta {
   name: Delete User
   type: http
-  seq: 5
+  seq: 7
 }
 
 delete {
-  url: {{base_url}}/users/{{user_id}}
+  url: {{base_url}}/users/{{created_user_id}}
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Permanently delete a user.
+  
+  Requires admin privileges (X-User-ID must be an admin).
+  
+  ⚠️ WARNING: This is permanent and cannot be undone.
+  
+  Consider using Deactivate User instead for soft deletion.
 }

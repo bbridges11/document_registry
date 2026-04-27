@@ -1,15 +1,28 @@
 meta {
   name: Get Approval Summary
   type: http
-  seq: 4
+  seq: 5
 }
 
 get {
   url: {{base_url}}/versions/{{version_id}}/approvals/summary
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get approval summary for a version.
+  
+  Returns:
+  - version_id
+  - required: Number of approvals required
+  - received: Number of approvals received
+  - remaining: Number still needed
+  - complete: Boolean - all approvals received
+  
+  Use this to check if version is ready to publish.
 }

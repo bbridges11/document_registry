@@ -12,7 +12,7 @@ type ApprovalRole string
 const (
 	ApprovalRoleTechnical ApprovalRole = "technical"
 	ApprovalRoleArchitect ApprovalRole = "architect"
-	ApprovalRoleProduct   ApprovalRole = "product"
+	ApprovalRoleAdmin     ApprovalRole = "admin"
 )
 
 func (a ApprovalRole) String() string {
@@ -20,7 +20,7 @@ func (a ApprovalRole) String() string {
 }
 
 func (r ApprovalRole) IsValid() bool {
-	return r == ApprovalRoleTechnical || r == ApprovalRoleArchitect || r == ApprovalRoleProduct
+	return r == ApprovalRoleTechnical || r == ApprovalRoleArchitect || r == ApprovalRoleAdmin
 }
 
 type Approval struct {

@@ -103,7 +103,7 @@ func (s *QueryService) GetApprovalSummary(ctx context.Context, versionID uuid.UU
 	ver := try.To1(s.versionRepo.GetByID(ctx, versionID))
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
 
-	policy := try.To1(s.policyFactory.GetPolicy(doc.DocumentType()))
+	policy := try.To1(s.policyFactory.GetPolicy(doc.DocumentType().ApprovalPolicy()))
 	approvals := try.To1(s.approvalRepo.ListByVersionID(ctx, versionID))
 
 	required := policy.RequiredApprovals()

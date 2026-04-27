@@ -1,15 +1,27 @@
 meta {
   name: Get User
   type: http
-  seq: 3
+  seq: 2
 }
 
 get {
-  url: {{base_url}}/users/{{user_id}}
+  url: {{base_url}}/users/{{created_user_id}}
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get a user by ID.
+  
+  Returns:
+  - User ID
+  - Email
+  - Name
+  - Role
+  - Active status
+  - Created/updated timestamps
 }

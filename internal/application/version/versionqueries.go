@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/bbridges_11/document-registry/internal/domain/approval"
+	domainDoc "github.com/bbridges_11/document-registry/internal/domain/document"
 	"github.com/bbridges_11/document-registry/internal/domain/workflow"
 	"github.com/bbridges_11/document-registry/internal/ports/outbound"
-	"github.com/bbridges_11/document-registry/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
@@ -16,7 +16,6 @@ type QueryService struct {
 	versionRepo     outbound.VersionRepository
 	documentRepo    outbound.DocumentRepository
 	approvalRepo    outbound.ApprovalRepository
-	authz           outbound.AuthorizationService
 	userRepo        outbound.UserRepository
 	workflowFactory *workflow.Factory
 	policyFactory   *approval.PolicyFactory
@@ -26,7 +25,6 @@ func NewQueryService(
 	versionRepo outbound.VersionRepository,
 	documentRepo outbound.DocumentRepository,
 	approvalRepo outbound.ApprovalRepository,
-	authz outbound.AuthorizationService,
 	userRepo outbound.UserRepository,
 	workflowFactory *workflow.Factory,
 	policyFactory *approval.PolicyFactory,
@@ -35,7 +33,6 @@ func NewQueryService(
 		versionRepo:     versionRepo,
 		documentRepo:    documentRepo,
 		approvalRepo:    approvalRepo,
-		authz:           authz,
 		userRepo:        userRepo,
 		workflowFactory: workflowFactory,
 		policyFactory:   policyFactory,
@@ -47,61 +44,38 @@ func (s *QueryService) GetVersion(ctx context.Context, query GetVersionQuery, us
 
 	ver := try.To1(s.versionRepo.GetByID(ctx, query.ID))
 
-	// Check if document has published version (public access)
-	hasPublished := try.To1(s.versionRepo.HasPublishedVersion(ctx, ver.DocumentID()))
-
-	if !hasPublished {
-		// Not published - check authorization
-		doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
-		allowed := try.To1(s.authz.CanAccessDocument(ctx, userID, doc.ID().String()))
-		if !allowed {
-			return nil, errors.ErrForbidden
-		}
-	}
-
 	return &VersionDTO{
-		ID:           ver.ID(),
-		DocumentID:   ver.DocumentID(),
-		Version:      ver.Version().String(),
-		Status:       ver.Status(),
-		ContentS3Key: ver.ContentS3Key(),
-		ContentHash:  ver.ContentHash(),
-		Metadata:     ver.Metadata(),
-		CreatedBy:    ver.CreatedBy(),
-		CreatedAt:    ver.CreatedAt(),
-		UpdatedAt:    ver.UpdatedAt(),
+		ID:          ver.ID(),
+		DocumentID:  ver.DocumentID(),
+		Version:     ver.Version().String(),
+		Status:      ver.Status(),
+		ContentKey:  ver.ContentRef().Location(),
+		ContentHash: ver.ContentHash(),
+		Metadata:    ver.Metadata(),
+		CreatedBy:   ver.CreatedBy(),
+		CreatedAt:   ver.CreatedAt(),
+		UpdatedAt:   ver.UpdatedAt(),
 	}, nil
 }
 
 func (s *QueryService) ListVersionsByDocument(ctx context.Context, query ListVersionsByDocumentQuery, userID string) (dtos []*VersionDTO, err error) {
 	defer err2.Handle(&err)
 
-	// Check if document has published version (public access)
-	hasPublished := try.To1(s.versionRepo.HasPublishedVersion(ctx, query.DocumentID))
-
-	if !hasPublished {
-		// Not published - check authorization
-		allowed := try.To1(s.authz.CanAccessDocument(ctx, userID, query.DocumentID.String()))
-		if !allowed {
-			return nil, errors.ErrForbidden
-		}
-	}
-
 	versions := try.To1(s.versionRepo.ListByDocumentID(ctx, query.DocumentID))
 
 	dtos = make([]*VersionDTO, 0, len(versions))
 	for _, ver := range versions {
 		dtos = append(dtos, &VersionDTO{
-			ID:           ver.ID(),
-			DocumentID:   ver.DocumentID(),
-			Version:      ver.Version().String(),
-			Status:       ver.Status(),
-			ContentS3Key: ver.ContentS3Key(),
-			ContentHash:  ver.ContentHash(),
-			Metadata:     ver.Metadata(),
-			CreatedBy:    ver.CreatedBy(),
-			CreatedAt:    ver.CreatedAt(),
-			UpdatedAt:    ver.UpdatedAt(),
+			ID:          ver.ID(),
+			DocumentID:  ver.DocumentID(),
+			Version:     ver.Version().String(),
+			Status:      ver.Status(),
+			ContentKey:  ver.ContentRef().Location(),
+			ContentHash: ver.ContentHash(),
+			Metadata:    ver.Metadata(),
+			CreatedBy:   ver.CreatedBy(),
+			CreatedAt:   ver.CreatedAt(),
+			UpdatedAt:   ver.UpdatedAt(),
 		})
 	}
 
@@ -115,17 +89,13 @@ func (s *QueryService) GetVersionStatus(ctx context.Context, query GetVersionSta
 
 	// Check authorization
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
-	allowed := try.To1(s.authz.CanAccessDocument(ctx, userID, doc.ID().String()))
-	if !allowed {
-		return nil, errors.ErrForbidden
-	}
 
 	// Get workflow to determine allowed actions
-	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType()))
+	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
 	allowedActions := wf.AllowedActions(ver.Status())
 
 	// Get approval summary
-	approvalSummary := try.To1(s.getApprovalSummary(ctx, ver.ID(), doc.DocumentType()))
+	approvalSummary := try.To1(s.getApprovalSummary(ctx, ver.ID(), doc.DocumentType().Code()))
 
 	return &VersionStatusDTO{
 		ID:              ver.ID(),
@@ -146,10 +116,6 @@ func (s *QueryService) GetVersionApprovals(ctx context.Context, query GetVersion
 
 	// Check authorization
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
-	allowed := try.To1(s.authz.CanAccessDocument(ctx, userID, doc.ID().String()))
-	if !allowed {
-		return nil, errors.ErrForbidden
-	}
 
 	// Get approvals
 	approvals := try.To1(s.approvalRepo.ListByVersionID(ctx, ver.ID()))
@@ -203,7 +169,7 @@ func (s *QueryService) GetVersionApprovals(ctx context.Context, query GetVersion
 	}
 
 	// Get approval summary
-	approvalSummary := try.To1(s.getApprovalSummary(ctx, ver.ID(), doc.DocumentType()))
+	approvalSummary := try.To1(s.getApprovalSummary(ctx, ver.ID(), doc.DocumentType().Code()))
 
 	return &VersionApprovalsDTO{
 		VersionID:  ver.ID(),
@@ -216,7 +182,21 @@ func (s *QueryService) GetVersionApprovals(ctx context.Context, query GetVersion
 }
 
 func (s *QueryService) getApprovalSummary(ctx context.Context, versionID uuid.UUID, documentType string) (ApprovalSummaryDTO, error) {
-	policy, err := s.policyFactory.GetPolicy(documentType)
+	// Parse document type to get approval policy
+	docType, err := domainDoc.ParseDocumentType(documentType)
+	if err != nil {
+		return ApprovalSummaryDTO{}, err
+	}
+
+	if !docType.RequiresApproval() {
+		// Document type doesn't require approval, return empty summary
+		return ApprovalSummaryDTO{
+			Required: make(map[approval.ApprovalRole]int),
+			Received: make(map[approval.ApprovalRole]int),
+		}, nil
+	}
+
+	policy, err := s.policyFactory.GetPolicy(docType.ApprovalPolicy())
 	if err != nil {
 		return ApprovalSummaryDTO{}, err
 	}

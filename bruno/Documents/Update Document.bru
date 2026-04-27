@@ -1,22 +1,37 @@
 meta {
   name: Update Document
   type: http
-  seq: 4
+  seq: 5
 }
 
 put {
   url: {{base_url}}/documents/{{document_id}}
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "title": "Updated Title",
-    "description": "Updated description"
+    "name": "API Gateway Pattern (Updated)",
+    "description": "Updated description for API gateway pattern",
+    "tags": ["api", "gateway", "microservices", "updated"]
   }
+}
+
+docs {
+  Update document metadata.
+  
+  Updatable fields:
+  - name
+  - description
+  - tags
+  
+  Cannot update:
+  - document_type
+  - created_by
 }

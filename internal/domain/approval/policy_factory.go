@@ -12,11 +12,11 @@ func NewPolicyFactory() *PolicyFactory {
 	return &PolicyFactory{}
 }
 
-func (f *PolicyFactory) GetPolicy(documentType string) (Policy, error) {
-	switch documentType {
-	case "pattern":
+func (f *PolicyFactory) GetPolicy(policyType PolicyType) (Policy, error) {
+	switch policyType {
+	case PolicyPattern:
 		return NewPatternPolicy(), nil
 	default:
-		return nil, errors.New(errors.CodeInvalidArgument, fmt.Sprintf("unknown document type: %s", documentType))
+		return nil, errors.New(errors.CodeInvalidArgument, fmt.Sprintf("unknown approval policy type: %s", policyType))
 	}
 }

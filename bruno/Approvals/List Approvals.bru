@@ -1,0 +1,27 @@
+meta {
+  name: List Approvals
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/versions/{{version_id}}/approvals/list
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  List all approvals for a specific version.
+  
+  Returns array of approvals with:
+  - Who approved
+  - Their role
+  - Comments
+  - Timestamps
+  
+  Useful for tracking approval progress.
+}

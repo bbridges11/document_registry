@@ -7,16 +7,34 @@ meta {
 post {
   url: {{base_url}}/versions/{{version_id}}/deprecate
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "reason": "Security vulnerability CVE-2024-1234",
-    "deprecation_note": "Please upgrade to v2.0.0"
+    "reason": "Superseded by version 2.0.0",
+    "deprecation_note": "Please migrate to version 2.0.0 by end of Q2"
   }
+}
+
+script:post-response {
+  if (res.status === 201 || res.status === 200) {
+    const data = res.body;
+    bru.setVar("deprecation_id", data.deprecation_id);
+  }
+}
+
+docs {
+  Request deprecation of a published version.
+  
+  For pattern documents:
+  - Manual deprecation requires approval
+  - Auto-deprecation (when new version published) doesn't require approval
+  
+  Saves deprecation_id for approval/rejection.
 }

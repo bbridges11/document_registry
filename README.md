@@ -5,31 +5,35 @@ A production-ready document management and version control system built with Go,
 ## 🎯 Features
 
 ### Core Functionality
-- ✅ **Document Management** - Create, update, search documents with metadata
+- ✅ **Document Management** - Create, update, search documents with metadata and tags
 - ✅ **Version Control** - Semantic versioning with workflow states (DRAFT → SUBMITTED → APPROVED → PUBLISHED)
-- ✅ **Approval Workflow** - Multi-stage approval process with stakeholder management
-- ✅ **Content Storage** - S3-compatible storage for document content
-- ✅ **Authorization** - Fine-grained access control with OpenFGA
-- ✅ **Search** - Full-text search with filters and pagination
-- ✅ **Validation** - Custom validation rules per document type
-- ✅ **Deprecation** - Manual and auto-deprecation workflows for versions
+- ✅ **Approval Workflow** - Multi-stage approval process with role-based stakeholder management
+- ✅ **Content Storage** - Multi-backend storage (S3, filesystem, database) with content validation
+- ✅ **Document Types** - Typed document system with optional capabilities (validation, approval, deprecation)
+- ✅ **Search** - Full-text search with filters, tags, and pagination
+- ✅ **Validation** - Extensible validation registry supporting multiple document types (YAML, JSON, etc.)
+- ✅ **Deprecation** - Manual and auto-deprecation workflows with approval support
+- ✅ **Health Checks** - Comprehensive health endpoints for ECS deployment (Postgres, S3, SNS)
 
 ### Architecture Highlights
 - **CQRS** - Logical separation of commands and queries
-- **Hexagonal Architecture** - Ports and adapters pattern
-- **Event-Driven** - Domain events for all state changes
-- **Clean Boundaries** - Application → Domain → Ports → Adapters
+- **Hexagonal Architecture** - Ports and adapters pattern with clean boundaries
+- **Event-Driven** - Internal domain events for all state changes
+- **Type-Safe Document System** - DocumentType value objects with capability declarations
+- **Validation Registry** - Pluggable validators for different document types
 - **Transaction Safety** - err2-based error handling with ACID transactions
-- **Minimal main.go** - All logic in appropriate layers
+- **Multi-Backend Storage** - Abstracted storage layer supporting S3, filesystem, and database
+- **ECS-Ready Health Checks** - ALB target group, liveness, readiness, and startup probes
 
 ### Technical Stack
-- **Language**: Go 1.25+
+- **Language**: Go 1.21+
 - **HTTP Framework**: Echo v4
 - **Database**: PostgreSQL 16
-- **Object Storage**: S3-compatible (LocalStack for local dev)
-- **Authorization**: OpenFGA
+- **Object Storage**: S3-compatible (AWS S3, LocalStack, MinIO)
+- **Messaging**: SNS-compatible (AWS SNS, LocalStack)
 - **Migrations**: golang-migrate
 - **Error Handling**: github.com/lainio/err2
+- **Config**: github.com/caarlos0/env/v11 with prefix support
 
 ---
 
@@ -40,11 +44,14 @@ A production-ready document management and version control system built with Go,
 - [Installation](#-installation)
 - [Configuration](#-configuration)
 - [Running Locally](#-running-locally)
+- [Health Checks](#-health-checks)
 - [API Documentation](#-api-documentation)
 - [Architecture](#-architecture)
+- [Document Types](#-document-types)
 - [Development](#-development)
 - [Testing](#-testing)
 - [Deployment](#-deployment)
+- [Migrations](#-migrations)
 - [Troubleshooting](#-troubleshooting)
 
 ---
@@ -58,367 +65,280 @@ A production-ready document management and version control system built with Go,
 git clone https://github.com/bbridges_11/document-registry.git
 cd document-registry
 
-# 2. Start all infrastructure (PostgreSQL, OpenFGA, LocalStack)
+# 2. Start all infrastructure (PostgreSQL, LocalStack)
 make docker-up
 
-# 3. Setup OpenFGA store and S3 bucket
-make openfga-setup
-make s3-create-bucket
+# 3. Create environment file
+cp .env.example .env
 
-# 4. Copy the OPENFGA_STORE_ID from step 3 output
-# Create .env file:
-cat > .env << EOF
-# Server
-HTTP_PORT=8080
-ENV=local
-
-# Database
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=document_registry
-
-# OpenFGA (paste your store ID from step 3)
-OPENFGA_ENABLED=false
-OPENFGA_URL=http://localhost:8081
-OPENFGA_STORE_ID=<paste-store-id-here>
-
-# AWS/S3
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
-AWS_S3_ENDPOINT=http://localhost:4566
-AWS_S3_BUCKET=document-registry
-AWS_S3_FORCE_PATH_STYLE=true
-EOF
-
-# 5. Run migrations
+# 4. Run migrations
 make db-migrate
 
-# 6. Start the application
+# 5. Start the application
 make run
 
-# 7. Verify it's running
+# 6. Verify it's running
 curl http://localhost:8080/health
 ```
 
 The API will be available at `http://localhost:8080`
+
+See [QUICKSTART.md](QUICKSTART.md) for detailed step-by-step instructions.
 
 ---
 
 ## 📦 Prerequisites
 
 ### Required
+- **Go 1.21+** - [Download](https://golang.org/doc/install)
+- **Docker Desktop** - [Download](https://docs.docker.com/get-docker/)
+- **Make** - Pre-installed on macOS/Linux, [Windows instructions](https://gnuwin32.sourceforge.net/packages/make.htm)
 
-- **Go 1.25+** - [Install Go](https://golang.org/doc/install)
-- **Docker** - [Install Docker](https://docs.docker.com/get-docker/)
-- **Make** - Usually pre-installed on macOS/Linux
-
-### Optional (for development)
-
-- **golangci-lint** - Code linting
-  ```bash
-  brew install golangci-lint  # macOS
-  ```
-
-- **golang-migrate** - Database migrations
-  ```bash
-  make migrate-install
-  ```
-
-- **AWS CLI** - For S3 operations
-  ```bash
-  brew install awscli  # macOS
-  ```
-
-- **jq** - JSON processing (for scripts)
-  ```bash
-  brew install jq  # macOS
-  ```
-
-- **Postman** - API testing (optional, collection provided)
+### Optional
+- **golang-migrate** - For manual database migrations ([Install](https://github.com/golang-migrate/migrate))
+- **AWS CLI** - For production S3/SNS operations ([Install](https://aws.amazon.com/cli/))
 
 ---
 
-## 📥 Installation
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/bbridges_11/document-registry.git
-cd document-registry
-```
-
-### 2. Install Go Dependencies
-
-```bash
-go mod download
-go mod tidy
-```
-
-### 3. Install Development Tools (Optional)
-
-```bash
-# Database migration tool
-make migrate-install
-
-# Code linter
-brew install golangci-lint
-
-# AWS CLI for S3 operations
-brew install awscli
-```
-
----
-
-## ⚙️ Configuration
+## 🔧 Configuration
 
 ### Environment Variables
 
-The application uses environment variables for configuration. See `.env.example` for all options.
-
-#### Required Variables
+All environment variables use the `DOCUMENT_REGISTRY_` prefix for namespace isolation:
 
 ```bash
-# Server Configuration
-HTTP_PORT=8080
-ENV=local  # local, dev, staging, prod
+# Application
+DOCUMENT_REGISTRY_APP_NAME=document-registry
+DOCUMENT_REGISTRY_APP_VERSION=1.0.0
+DOCUMENT_REGISTRY_PROFILE=local  # local, cloud-dev, cloud-prod
+
+# Logging
+DOCUMENT_REGISTRY_LOG_LEVEL=info  # debug, info, warn, error
+DOCUMENT_REGISTRY_LOG_FORMAT=json  # json, console
+
+# Server
+DOCUMENT_REGISTRY_SERVER_DRIVER=http  # http, grpc
+DOCUMENT_REGISTRY_HTTP_HOST=0.0.0.0
+DOCUMENT_REGISTRY_HTTP_PORT=8080
 
 # Database
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=document_registry
+DOCUMENT_REGISTRY_DB_DRIVER=postgres  # postgres, dynamo
+DOCUMENT_REGISTRY_POSTGRES_HOST=localhost
+DOCUMENT_REGISTRY_POSTGRES_PORT=5432
+DOCUMENT_REGISTRY_POSTGRES_DATABASE=document_registry
+DOCUMENT_REGISTRY_POSTGRES_USER=postgres
+DOCUMENT_REGISTRY_POSTGRES_PASSWORD=postgres
+DOCUMENT_REGISTRY_POSTGRES_SSL_MODE=disable
+DOCUMENT_REGISTRY_POSTGRES_MAX_CONNS=25
 
-# OpenFGA Authorization
-OPENFGA_ENABLED=false  # true for production
-OPENFGA_URL=http://localhost:8081
-OPENFGA_STORE_ID=<your-store-id>
-
-# AWS S3 Storage
+# AWS - Region can use either standard AWS SDK variable OR prefixed version
 AWS_REGION=us-east-1
-AWS_S3_BUCKET=document-registry
-AWS_S3_ENDPOINT=http://localhost:4566  # LocalStack
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
-AWS_S3_FORCE_PATH_STYLE=true
-```
+# OR
+DOCUMENT_REGISTRY_AWS_REGION=us-east-1
 
-#### Optional Variables
+# S3
+DOCUMENT_REGISTRY_S3_BUCKET=document-registry
+DOCUMENT_REGISTRY_S3_ENDPOINT=http://localhost:4566  # For LocalStack
 
-```bash
-# Logging
-LOG_LEVEL=info  # debug, info, warn, error
-LOG_FORMAT=json  # json, console
-
-# CORS
-CORS_ENABLED=true
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
-
-# Rate Limiting
-RATE_LIMIT_ENABLED=true
-RATE_LIMIT_REQUESTS_PER_SECOND=100
+# SNS
+DOCUMENT_REGISTRY_SNS_TOPIC_ARN=arn:aws:sns:us-east-1:000000000000:document-registry
+DOCUMENT_REGISTRY_SNS_ENABLED=false
+DOCUMENT_REGISTRY_SNS_ENDPOINT=http://localhost:4566  # For LocalStack
 ```
 
 ### Configuration Profiles
 
-The application supports multiple configuration profiles:
+**local** - Development with LocalStack
+- PostgreSQL with password auth
+- LocalStack for S3/SNS
+- Console logging
 
-- **local** - Local development with bypassed auth
-- **dev** - Development environment
-- **staging** - Pre-production environment
-- **prod** - Production environment
+**cloud-dev** - AWS development environment
+- RDS with IAM auth
+- AWS S3/SNS
+- JSON logging
 
-Set via `ENV` environment variable.
+**cloud-prod** - Production environment
+- RDS with IAM auth
+- AWS S3/SNS with encryption
+- JSON logging with sampling
+
+See [ENV_MIGRATION.md](ENV_MIGRATION.md) for migration guide from old variable names.
 
 ---
 
 ## 🏃 Running Locally
 
-### Method 1: All-in-One (Recommended)
+### Quick Start (All-in-One)
 
 ```bash
-# Start everything
 make dev-full
-
-# Copy the OPENFGA_STORE_ID to .env
-# Then start the app
-make run
 ```
 
-### Method 2: Step-by-Step
+This runs: docker-up → db-migrate → s3-create-bucket → run
 
-#### Step 1: Start Infrastructure
+### Step-by-Step
 
 ```bash
-# Start PostgreSQL, OpenFGA, and LocalStack
+# 1. Start infrastructure
 make docker-up
-```
 
-This starts:
-- **PostgreSQL** on port 5432
-- **OpenFGA** on ports 8081 (API) and 3000 (Playground)
-- **LocalStack** on port 4566
-
-#### Step 2: Setup OpenFGA
-
-```bash
-make openfga-setup
-```
-
-Copy the `OPENFGA_STORE_ID` from the output and add it to your `.env` file.
-
-#### Step 3: Create S3 Bucket
-
-```bash
-make s3-create-bucket
-```
-
-#### Step 4: Run Database Migrations
-
-```bash
+# 2. Run migrations (consolidated schema)
 make db-migrate
-```
 
-This creates all tables:
-- `documents` - Document metadata
-- `versions` - Version history
-- `stakeholders` - Document stakeholders
-- `approvals` - Approval records
-- `users` - User accounts
-- `deprecations` - Deprecation tracking
+# 3. Create S3 bucket
+make s3-create-bucket
 
-#### Step 5: Start the Application
-
-```bash
+# 4. Start the application
 make run
 ```
 
-Or build and run:
+### Verify Health
 
 ```bash
-make build
-./bin/document-registry
-```
+# Check all services
+make health
 
-#### Step 6: Verify
-
-```bash
-# Health check
-curl http://localhost:8080/health
-
-# Should return: {"status":"healthy"}
+# Individual health checks
+curl http://localhost:8080/health          # ALB health (Postgres + S3)
+curl http://localhost:8080/health/live     # Liveness probe
+curl http://localhost:8080/health/ready    # Readiness (Postgres + S3 + SNS)
+curl http://localhost:8080/health/startup  # Startup probe
 ```
 
 ---
 
-## 🌐 API Documentation
+## 🏥 Health Checks
 
-### Postman Collection
+The service provides four health check endpoints optimized for ECS deployment:
 
-A complete Postman collection is provided with all 48 endpoints:
+### `/health` - ALB Target Group Health Check
+Checks critical dependencies required for operation:
+- **Postgres** - Database connectivity
+- **S3** - Object storage accessibility
+
+**Use:** ALB target group health checks
+**Timeout:** 5 seconds
+**Returns:** 200 if healthy, 503 if unhealthy
+
+### `/health/live` - Container Liveness Probe
+Indicates the container process is running.
+
+**Use:** ECS container `healthCheck` or Docker HEALTHCHECK
+**Timeout:** Instant (<100ms)
+**Returns:** Always 200
+
+### `/health/ready` - Deep Readiness Check
+Checks all dependencies including optional services:
+- **Postgres** - Database connectivity
+- **S3** - Object storage accessibility
+- **SNS** - Notification service (if enabled)
+
+**Use:** Monitoring dashboards, debugging
+**Timeout:** 5 seconds
+**Returns:** 200 if ready, 503 if not ready
+
+### `/health/startup` - Startup Health Check
+Same as readiness but with longer timeout for cold starts.
+
+**Use:** ECS startup checks
+**Timeout:** 10 seconds
+**Returns:** 200 if started, 503 if starting
+
+### ECS Task Definition Example
+
+```json
+{
+  "healthCheck": {
+    "command": ["CMD-SHELL", "curl -f http://localhost:8080/health/live || exit 1"],
+    "interval": 30,
+    "timeout": 5,
+    "retries": 3,
+    "startPeriod": 60
+  }
+}
+```
+
+### ALB Target Group Configuration
 
 ```
-postman/
-├── document-registry.postman_collection.json  # Main collection (42 endpoints)
-├── deprecation.postman_collection.json        # Deprecation feature (6 endpoints)
-└── local.postman_environment.json             # Local environment
+Protocol: HTTP
+Path: /health
+Port: traffic-port
+Healthy threshold: 2
+Unhealthy threshold: 2
+Timeout: 5 seconds
+Interval: 30 seconds
 ```
 
-**Import to Postman**:
-1. Open Postman
-2. Click **Import**
-3. Select the collection files
-4. Import the environment file
-5. Set your Bearer token in the environment
+---
 
-### API Endpoints (48 total)
+## 📚 API Documentation
 
-#### Documents (8 endpoints)
-- `POST /documents` - Create document
-- `GET /documents` - List/search documents
-- `GET /documents/:id` - Get document by ID
-- `PUT /documents/:id` - Update document
-- `DELETE /documents/:id` - Delete document
-- `GET /documents/:id/versions` - List document versions
-- `POST /documents/:id/versions` - Create new version
-- `POST /documents/search` - Advanced search
+### Core Endpoints
 
-#### Versions (12 endpoints)
-- `GET /versions/:id` - Get version by ID
-- `PUT /versions/:id` - Update version
-- `DELETE /versions/:id` - Delete version
-- `POST /versions/:id/submit` - Submit for approval
-- `POST /versions/:id/approve` - Approve version
+#### Documents
+- `POST /documents` - Create document with first version
+- `GET /documents` - List all documents (paginated)
+- `GET /documents/:id` - Get document details
+- `PUT /documents/:id` - Update document metadata
+- `GET /documents/search` - Search documents with filters
+
+#### Versions
+- `POST /documents/:documentId/versions` - Create new version
+- `GET /documents/:documentId/versions` - List document versions
+- `GET /versions/:id` - Get version details
+- `POST /versions/:id/submit` - Submit for review
+- `POST /versions/:id/approve` - Approve version (requires approval role)
 - `POST /versions/:id/reject` - Reject version
-- `POST /versions/:id/publish` - Publish version
-- `GET /versions/:id/content` - Get version content
-- `PUT /versions/:id/content` - Upload version content
-- `POST /versions/:id/validate` - Validate version
-- `GET /versions/:id/approvals` - List approvals
-- `POST /versions/:id/approvals` - Create approval
+- `POST /versions/:id/publish` - Publish approved version
 
-#### Stakeholders (5 endpoints)
-- `GET /documents/:id/stakeholders` - List stakeholders
-- `POST /documents/:id/stakeholders` - Add stakeholder
-- `DELETE /documents/:id/stakeholders/:userID` - Remove stakeholder
-- `PUT /documents/:id/stakeholders/:userID` - Update stakeholder role
-- `GET /stakeholders/me` - My stakeholder relationships
+#### Stakeholders
+- `POST /documents/:documentId/stakeholders` - Add stakeholder
+- `GET /documents/:documentId/stakeholders` - List stakeholders
+- `DELETE /stakeholders/:id` - Remove stakeholder
 
-#### Approvals (6 endpoints)
-- `GET /approvals` - List all approvals
-- `GET /approvals/:id` - Get approval details
-- `POST /approvals/:id/approve` - Approve
-- `POST /approvals/:id/reject` - Reject
-- `GET /approvals/pending` - Pending approvals
-- `GET /approvals/me` - My approval tasks
+#### Approvals
+- `POST /versions/:versionId/approvals` - Submit approval
+- `GET /versions/:versionId/approvals` - List approvals
 
-#### Deprecation (6 endpoints)
+#### Deprecation
 - `POST /versions/:id/deprecate` - Request deprecation
-- `POST /versions/:id/deprecation/approve` - Approve deprecation
-- `POST /versions/:id/deprecation/reject` - Reject deprecation
-- `POST /versions/:id/deprecation/cancel` - Cancel deprecation
-- `GET /versions/:id/deprecation` - Get deprecation details
-- `GET /versions/:id/deprecation/status` - Get status with permissions
+- `POST /deprecations/:id/approve` - Approve deprecation
+- `POST /deprecations/:id/reject` - Reject deprecation
 
-#### Users (8 endpoints)
-- `POST /users` - Create user
-- `GET /users` - List users
-- `GET /users/:id` - Get user
-- `PUT /users/:id` - Update user
-- `DELETE /users/:id` - Delete user
-- `POST /users/:id/roles` - Assign role
-- `DELETE /users/:id/roles/:role` - Remove role
-- `GET /users/me` - Get current user
+#### Validation
+- `POST /validation/content` - Validate document content
 
-#### Validation (2 endpoints)
-- `POST /validation/rules` - Create validation rule
-- `GET /validation/rules/:documentType` - Get rules for document type
+#### Health
+- `GET /health` - ALB health check
+- `GET /health/live` - Liveness probe
+- `GET /health/ready` - Readiness check
+- `GET /health/startup` - Startup check
 
-#### Health (1 endpoint)
-- `GET /health` - Service health check
-
-### Authentication
-
-All endpoints (except `/health`) require a Bearer token:
+### Example: Create Pattern Document
 
 ```bash
-curl -H "Authorization: Bearer <your-token>" \
-  http://localhost:8080/documents
-```
+# Encode YAML content as base64
+CONTENT=$(cat pattern.yaml | base64)
 
-For local development with `OPENFGA_ENABLED=false`, you can use any token:
-
-```bash
-curl -H "Authorization: Bearer test-token" \
-  http://localhost:8080/documents
+# Create document
+curl -X POST http://localhost:8080/documents \
+  -H "X-User-ID: user-123" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "API Gateway Pattern",
+    "description": "Standard API gateway pattern",
+    "document_type": "pattern",
+    "tags": ["api", "gateway", "microservices"],
+    "version": "1.0.0",
+    "content": "'$CONTENT'"
+  }'
 ```
 
 ---
 
-## 🏗️ Architecture
+## 🏛️ Architecture
 
 ### Project Structure
 
@@ -426,304 +346,173 @@ curl -H "Authorization: Bearer test-token" \
 document-registry/
 ├── cmd/
 │   └── api/
-│       └── main.go                    # Application entry point
+│       └── main.go              # Application entrypoint
 ├── internal/
-│   ├── application/                   # Use cases and application logic
-│   │   ├── approval/                  # Approval workflows
-│   │   ├── deprecation/               # Deprecation workflows
-│   │   ├── document/                  # Document operations
-│   │   ├── stakeholder/               # Stakeholder management
-│   │   ├── user/                      # User management
-│   │   ├── validation/                # Validation rules
-│   │   └── version/                   # Version control
-│   ├── domain/                        # Business logic and entities
-│   │   ├── approval/                  # Approval aggregate
-│   │   ├── deprecation/               # Deprecation aggregate
-│   │   ├── document/                  # Document aggregate
-│   │   ├── shared/                    # Shared domain types
-│   │   ├── stakeholder/               # Stakeholder value objects
-│   │   ├── user/                      # User aggregate
-│   │   ├── version/                   # Version aggregate
-│   │   └── workflow/                  # Workflow states
+│   ├── application/             # Use cases and application logic
+│   │   ├── document/           # Document commands/queries
+│   │   ├── version/            # Version commands/queries
+│   │   ├── approval/           # Approval workflows
+│   │   ├── deprecation/        # Deprecation workflows
+│   │   └── validation/         # Content validation
+│   ├── domain/                  # Domain entities and business logic
+│   │   ├── document/           # Document aggregate + DocumentType
+│   │   ├── version/            # Version entity
+│   │   ├── workflow/           # Workflow state machines
+│   │   ├── approval/           # Approval policies
+│   │   └── shared/             # Shared value objects
+│   ├── ports/
+│   │   └── outbound/           # Outbound dependency interfaces
 │   ├── adapters/
-│   │   ├── inbound/                   # HTTP handlers
-│   │   │   └── http/
-│   │   │       ├── approval/
-│   │   │       ├── deprecation/
-│   │   │       ├── document/
-│   │   │       ├── health/
-│   │   │       ├── stakeholder/
-│   │   │       ├── user/
-│   │   │       ├── validation/
-│   │   │       └── version/
-│   │   └── outbound/                  # Repository implementations
-│   │       ├── authorization/
-│   │       │   └── openfga/
-│   │       ├── persistence/
-│   │       │   └── postgres/
-│   │       └── storage/
-│   │           └── s3/
-│   ├── ports/                         # Interface definitions
+│   │   ├── inbound/
+│   │   │   └── http/           # HTTP handlers (Echo)
 │   │   └── outbound/
-│   ├── platform/                      # Infrastructure setup
-│   │   ├── config/                    # Configuration
-│   │   ├── events/                    # Event bus
-│   │   ├── logger/                    # Logging
-│   │   ├── postgres/                  # Database client
-│   │   └── server/                    # HTTP server
-│   ├── events/                        # Domain events
-│   └── bootstrap/                     # Dependency injection
-├── migrations/                        # Database migrations
+│   │       ├── persistence/    # Repositories (Postgres)
+│   │       ├── storage/        # Storage backends (S3, filesystem)
+│   │       ├── notification/   # SNS adapter
+│   │       └── validation/     # Validation registry + validators
+│   ├── platform/                # Technical infrastructure
+│   │   ├── config/             # Configuration loading
+│   │   ├── database/           # Database connections
+│   │   ├── aws/                # AWS client factories
+│   │   ├── events/             # Event bus
+│   │   └── server/             # HTTP server setup
+│   ├── bootstrap/               # Dependency wiring
+│   └── events/                  # Event contracts
 ├── pkg/
-│   └── errors/                        # Shared error types
-├── postman/                           # API collections
-├── resources/                         # Config examples
-├── Makefile                           # Build and dev commands
-├── docker-compose.yml                 # Local infrastructure
-└── go.mod
+│   └── errors/                  # Shared error codes
+├── migrations/                  # Historical migrations
+├── migrations_consolidated/     # Consolidated initial schema
+└── docs/                        # Additional documentation
 ```
 
-### Architectural Patterns
+### Key Design Patterns
 
-#### Hexagonal Architecture
+**Hexagonal Architecture:**
+- Application layer defines use cases
+- Ports define dependency interfaces
+- Adapters implement infrastructure concerns
 
-```
-┌─────────────────────────────────────────────────┐
-│                   Adapters                      │
-│  ┌────────────┐               ┌─────────────┐  │
-│  │  HTTP      │               │  PostgreSQL │  │
-│  │  Handlers  │               │  Repository │  │
-│  └─────┬──────┘               └──────┬──────┘  │
-│        │                             │         │
-│  ┌─────▼──────────────────────────▼────────┐  │
-│  │         Ports (Interfaces)             │  │
-│  └────────────────┬───────────────────────┘  │
-│                   │                           │
-│  ┌────────────────▼──────────────────────┐   │
-│  │       Application Layer               │   │
-│  │   (Use Cases, Commands, Queries)      │   │
-│  └────────────────┬──────────────────────┘   │
-│                   │                           │
-│  ┌────────────────▼──────────────────────┐   │
-│  │          Domain Layer                 │   │
-│  │  (Entities, Value Objects, Events)    │   │
-│  └───────────────────────────────────────┘   │
-└─────────────────────────────────────────────────┘
-```
+**CQRS:**
+- Commands modify state
+- Queries read state
+- Explicit input/output models
 
-#### CQRS Separation
+**Event-Driven:**
+- Domain events for state changes
+- Internal event bus
+- Event handlers for side effects
 
-- **Commands** - State-changing operations (Create, Update, Delete)
-- **Queries** - Read operations (Get, List, Search)
+**Type-Safe Document System:**
+- DocumentType value objects
+- Capability-based features (validation, approval, deprecation)
+- Registry pattern for extensibility
 
-Each feature has separate command and query services.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design decisions.
 
-#### Event-Driven
+---
 
-All state changes emit domain events:
-- `DocumentCreated`, `DocumentUpdated`
-- `VersionCreated`, `VersionPublished`
-- `DeprecationRequested`, `VersionDeprecated`
-- `ApprovalCreated`, `ApprovalApproved`
+## 📄 Document Types
+
+The service supports a typed document system where each document type declares its capabilities:
+
+### Supported Document Types
+
+#### Pattern (`"pattern"`)
+- **Workflow**: Approval-based (Draft → Submitted → Under Review → Approved → Published)
+- **Approval**: Required (multi-stakeholder approval)
+- **Validation**: YAML schema validation
+- **Deprecation**: Supported (manual requires approval, auto doesn't)
+
+### Adding New Document Types
+
+See the [feature walkthrough](MIGRATIONS.md#adding-new-document-types) for step-by-step instructions on adding new types like:
+- **Policy** - Auto-publish with JSON validation
+- **Contract** - Strict approval with legal review
+- **Template** - No approval, no deprecation
 
 ---
 
 ## 🛠️ Development
 
-### Available Make Commands
+### Prerequisites
 
-View all commands:
 ```bash
-make help
+# Install development tools
+make dev-setup
+
+# Install linter
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 ```
 
-#### Development Commands
+### Available Commands
 
 ```bash
-# Run the application
-make run
+make help                 # Show all commands
 
-# Build binary
-make build
+# Development
+make run                  # Run application
+make build                # Build binary
+make test                 # Run tests
+make test-coverage        # Generate coverage report
+make lint                 # Run linter
+make fmt                  # Format code
+make tidy                 # Tidy dependencies
 
-# Run tests
+# Docker Infrastructure
+make docker-up            # Start all services
+make docker-down          # Stop all services
+make docker-clean         # Remove containers and volumes
+make docker-postgres      # Start only Postgres
+make docker-localstack    # Start only LocalStack
+
+# Database
+make db-migrate           # Run migrations (consolidated)
+make db-migrate-down      # Rollback one migration
+make db-reset             # Drop and recreate database
+make db-shell             # Open psql shell
+
+# AWS/LocalStack
+make s3-create-bucket     # Create S3 bucket
+make s3-list-buckets      # List S3 buckets
+make sns-create-topic     # Create SNS topic
+
+# Health & Monitoring
+make health               # Check all services
+make logs                 # View application logs
+```
+
+### Running Tests
+
+```bash
+# All tests
 make test
 
-# Run tests with coverage
+# With coverage
 make test-coverage
+open coverage.html
 
-# Format code
-make fmt
+# Specific package
+go test -v ./internal/domain/document/...
 
-# Run linter
-make lint
-
-# Tidy dependencies
-make tidy
-```
-
-#### Docker Commands
-
-```bash
-# Start all infrastructure
-make docker-up
-
-# Stop all infrastructure
-make docker-down
-
-# Restart infrastructure
-make docker-restart
-
-# Check running containers
-make docker-ps
-
-# View logs
-make docker-postgres-logs
-make docker-openfga-logs
-make docker-localstack-logs
-```
-
-#### Database Commands
-
-```bash
-# Run migrations
-make db-migrate
-
-# Rollback last migration
-make db-migrate-down
-
-# Rollback all migrations
-make db-migrate-down-all
-
-# Check migration version
-make db-migrate-version
-
-# Reset database (WARNING: destructive)
-make db-reset
-
-# Connect to database shell
-make db-shell
-
-# Create new migration
-make migrate-create NAME=add_new_table
-```
-
-#### OpenFGA Commands
-
-```bash
-# Create store
-make openfga-setup
-
-# List stores
-make openfga-list-stores
-
-# Check health
-make openfga-health
-
-# Open playground
-make openfga-playground
-```
-
-#### S3 Commands
-
-```bash
-# Create bucket
-make s3-create-bucket
-
-# List buckets
-make s3-list-buckets
-
-# List objects
-make s3-list-objects
-```
-
-#### Health Checks
-
-```bash
-# Check all services
-make health
-
-# Check port availability
-make ports
-```
-
-### Adding a New Feature
-
-Follow the `/go-feature-implementation` skill pattern:
-
-1. **Domain Layer** - Create aggregates, entities, value objects
-2. **Application Layer** - Define use cases, inputs, outputs
-3. **Ports** - Define interfaces
-4. **Adapters** - Implement repositories and handlers
-5. **Events** - Define domain events
-6. **Bootstrap** - Wire dependencies
-
-See `ARCHITECTURE.md` for detailed guidelines.
-
----
-
-## 🧪 Testing
-
-### Run All Tests
-
-```bash
-make test
-```
-
-### Run with Coverage
-
-```bash
-make test-coverage
-```
-
-This generates `coverage.html` which you can open in a browser.
-
-### Manual API Testing
-
-Use the provided Postman collections:
-
-```bash
-# Import to Postman
-# 1. Import postman/*.postman_collection.json
-# 2. Import postman/local.postman_environment.json
-# 3. Set Bearer token in environment
-# 4. Start making requests
-```
-
-### Example cURL Requests
-
-```bash
-# Create a document
-curl -X POST http://localhost:8080/documents \
-  -H "Authorization: Bearer test" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Test Document",
-    "type": "policy",
-    "description": "A test document"
-  }'
-
-# List documents
-curl http://localhost:8080/documents \
-  -H "Authorization: Bearer test"
-
-# Get document
-curl http://localhost:8080/documents/<document-id> \
-  -H "Authorization: Bearer test"
+# Integration tests
+go test -v -tags=integration ./...
 ```
 
 ---
 
-## 🚢 Deployment
+## 📦 Deployment
 
 ### Building for Production
 
 ```bash
 # Build optimized binary
-CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/document-registry cmd/api/main.go
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+  -ldflags="-w -s" \
+  -o bin/document-registry-linux-amd64 \
+  cmd/api/main.go
 ```
 
-### Docker Build
+### Docker Image
 
 ```bash
 # Build image
@@ -731,36 +520,71 @@ docker build -t document-registry:latest .
 
 # Run container
 docker run -p 8080:8080 \
-  -e ENV=prod \
-  -e POSTGRES_HOST=<db-host> \
-  -e OPENFGA_URL=<openfga-url> \
+  --env-file .env.prod \
   document-registry:latest
 ```
 
-### Environment-Specific Config
+### ECS Deployment
 
-Use different `.env` files for each environment:
+1. **Task Definition** - Set health check to `/health/live`
+2. **Target Group** - Set health check to `/health`
+3. **Environment Variables** - Use `DOCUMENT_REGISTRY_` prefix
+4. **IAM Roles** - Grant S3, SNS, and RDS permissions
 
-```bash
-# Development
-ENV=dev go run cmd/api/main.go
+Example task definition snippet:
 
-# Staging
-ENV=staging go run cmd/api/main.go
-
-# Production
-ENV=prod ./bin/document-registry
+```json
+{
+  "containerDefinitions": [{
+    "name": "document-registry",
+    "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/document-registry:latest",
+    "portMappings": [{
+      "containerPort": 8080,
+      "protocol": "tcp"
+    }],
+    "environment": [
+      {"name": "DOCUMENT_REGISTRY_PROFILE", "value": "cloud-prod"},
+      {"name": "DOCUMENT_REGISTRY_HTTP_PORT", "value": "8080"},
+      {"name": "AWS_REGION", "value": "us-east-1"}
+    ],
+    "healthCheck": {
+      "command": ["CMD-SHELL", "curl -f http://localhost:8080/health/live || exit 1"],
+      "interval": 30,
+      "timeout": 5,
+      "retries": 3,
+      "startPeriod": 60
+    }
+  }]
+}
 ```
 
-### Database Migrations
+---
 
-In production, run migrations before deploying:
+## 🗄️ Migrations
+
+### Using Consolidated Migrations (New Deployments)
+
+For fresh databases, use the consolidated schema:
 
 ```bash
+# Apply consolidated migration
+migrate -path migrations_consolidated \
+        -database "postgres://user:pass@host:5432/dbname?sslmode=disable" \
+        up
+```
+
+### Using Historical Migrations (Existing Databases)
+
+For databases with existing data:
+
+```bash
+# Apply incremental migrations
 migrate -path migrations \
-  -database "postgresql://user:pass@host:5432/dbname?sslmode=require" \
-  up
+        -database "postgres://user:pass@host:5432/dbname?sslmode=disable" \
+        up
 ```
+
+See [MIGRATIONS.md](MIGRATIONS.md) for complete migration documentation.
 
 ---
 
@@ -768,160 +592,86 @@ migrate -path migrations \
 
 ### Common Issues
 
-#### "Port 8080 already in use"
-
+**Port already in use**
 ```bash
-# Find process using port
 lsof -i :8080
-
-# Kill process
-kill -9 <PID>
-
 # Or use different port
-HTTP_PORT=8081 make run
+DOCUMENT_REGISTRY_HTTP_PORT=8081 make run
 ```
 
-#### "Cannot connect to PostgreSQL"
-
+**Database connection failed**
 ```bash
-# Check if container is running
-make docker-ps
-
-# Check PostgreSQL logs
+# Check Postgres is running
 make docker-postgres-logs
 
-# Restart PostgreSQL
-make docker-postgres-stop
-make docker-postgres
+# Restart Postgres
+make docker-down
+make docker-up
 ```
 
-#### "OpenFGA store not found"
-
+**S3 connection failed**
 ```bash
-# Create new store
-make openfga-setup
+# Check LocalStack
+make docker-localstack-logs
 
-# Copy STORE_ID to .env
-# Update OPENFGA_STORE_ID in .env
+# Recreate bucket
+make s3-create-bucket
 ```
 
-#### "Database migration failed"
-
+**Migration failed**
 ```bash
-# Check current version
-make db-migrate-version
+# Check migration status
+make db-status
 
-# Force to specific version
-make db-migrate-force VERSION=4
-
-# Or reset and re-run
+# Reset and retry
 make db-reset
 make db-migrate
 ```
 
-#### "S3 bucket not found"
+### Health Check Debugging
 
 ```bash
-# Create bucket
-make s3-create-bucket
+# Check specific service health
+curl http://localhost:8080/health/ready
 
-# Verify
-make s3-list-buckets
+# View detailed health status
+curl http://localhost:8080/health/ready | jq .
+
+# Check logs
+make logs
 ```
-
-### Debugging
-
-#### Enable Debug Logging
-
-```bash
-LOG_LEVEL=debug make run
-```
-
-#### Database Queries
-
-```bash
-# Connect to database
-make db-shell
-
-# Check tables
-\dt
-
-# View documents
-SELECT * FROM documents;
-
-# View versions
-SELECT * FROM versions;
-
-# Exit
-\q
-```
-
-#### Check Service Health
-
-```bash
-# All services
-make health
-
-# Individual checks
-curl http://localhost:8080/health
-curl http://localhost:8081/healthz
-docker exec postgres pg_isready
-```
-
-### Getting Help
-
-- **Architecture Questions**: See `ARCHITECTURE.md`
-- **Feature Documentation**: See `docs/` directory
-- **Issues**: Open a GitHub issue
-- **Discussions**: GitHub Discussions
 
 ---
 
-## 📚 Documentation
+## 📖 Additional Documentation
 
-- `ARCHITECTURE.md` - Architecture guidelines
-- `IMPLEMENTATION.md` - Implementation details
-- `postman/README.md` - API testing guide
-- Feature-specific docs in `docs/`:
-  - `DEPRECATION_FEATURE_COMPLETE.md`
-  - `DEPRECATION_FLOWS_COMPLETE.md`
-  - `AUTHORIZATION_IMPLEMENTATION.md`
-  - `EVENT_HANDLERS_ANALYSIS.md`
+- [QUICKSTART.md](QUICKSTART.md) - 5-minute getting started guide
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Detailed architecture decisions
+- [MIGRATIONS.md](MIGRATIONS.md) - Database migration guide
+- [ENV_MIGRATION.md](ENV_MIGRATION.md) - Environment variable migration
+- [API.md](docs/API.md) - Complete API reference
 
 ---
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Follow the architecture guidelines in `ARCHITECTURE.md`
-4. Write tests
-5. Run `make lint` and `make fmt`
-6. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ---
 
 ## 📄 License
 
-[Your License Here]
-
----
-
-## 👥 Authors
-
-- Your Name / Team
+This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
 
 ## 🙏 Acknowledgments
 
-- Built following Clean Architecture principles
-- Uses err2 for error handling
-- Implements CQRS and DDD patterns
-- OpenFGA for authorization
-- PostgreSQL for persistence
-- S3-compatible storage
-
----
-
-**Happy Coding!** 🚀
+- Built with [Echo](https://echo.labstack.com/) HTTP framework
+- Error handling with [err2](https://github.com/lainio/err2)
+- Configuration with [env](https://github.com/caarlos0/env)
+- Migrations with [golang-migrate](https://github.com/golang-migrate/migrate)

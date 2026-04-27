@@ -1,7 +1,7 @@
 package validation
 
-// ValidateDefinitionResponse contains the validation result
-type ValidateDefinitionResponse struct {
+// ValidateContentResponse contains the validation result
+type ValidateContentResponse struct {
 	Valid  bool              `json:"valid"`
 	Issues []ValidationIssue `json:"issues"`
 }

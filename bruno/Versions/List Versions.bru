@@ -1,0 +1,21 @@
+meta {
+  name: List Versions
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/documents/{{document_id}}/versions
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  List all versions of a document.
+  
+  Returns versions in reverse chronological order (newest first).
+}

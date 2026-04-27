@@ -91,7 +91,6 @@ type CommandService struct {
 	versionRepo     outbound.VersionRepository
 	txManager       outbound.TransactionManager
 	eventBus        outbound.EventBus
-	authz           outbound.AuthorizationService
 }
 
 // NewCommandService creates a new command service
@@ -100,13 +99,11 @@ func NewCommandService(
 	versionRepo outbound.VersionRepository,
 	txManager outbound.TransactionManager,
 	eventBus outbound.EventBus,
-	authz outbound.AuthorizationService,
 ) *CommandService {
 	return &CommandService{
 		deprecationRepo: deprecationRepo,
 		versionRepo:     versionRepo,
 		txManager:       txManager,
 		eventBus:        eventBus,
-		authz:           authz,
 	}
 }

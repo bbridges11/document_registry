@@ -66,14 +66,14 @@ type DocumentWithVersionDTO struct {
 }
 
 type VersionDTO struct {
-	ID           uuid.UUID
-	DocumentID   uuid.UUID
-	Version      string
-	Status       string
-	ContentS3Key string
-	ContentHash  string
-	Metadata     map[string]any
-	CreatedBy    string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID          uuid.UUID
+	DocumentID  uuid.UUID
+	Version     string
+	Status      string
+	ContentKey  string // Generic key - abstracted from storage backend
+	ContentHash string
+	Metadata    map[string]any
+	CreatedBy   string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }

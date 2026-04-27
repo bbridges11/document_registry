@@ -1,15 +1,26 @@
 meta {
   name: Get Version
   type: http
-  seq: 3
+  seq: 2
 }
 
 get {
   url: {{base_url}}/versions/{{version_id}}
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get a specific version by ID.
+  
+  Returns:
+  - Version details
+  - Status
+  - Content reference
+  - Approvals
+  - Workflow state
 }

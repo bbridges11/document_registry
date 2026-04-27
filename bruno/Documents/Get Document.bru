@@ -1,15 +1,25 @@
 meta {
   name: Get Document
   type: http
-  seq: 3
+  seq: 2
 }
 
 get {
   url: {{base_url}}/documents/{{document_id}}
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get a document by ID.
+  
+  Returns:
+  - Document metadata
+  - All versions
+  - Stakeholders
+  - Latest status
 }

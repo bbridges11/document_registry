@@ -2,9 +2,10 @@ package version
 
 // CreateVersionRequest represents HTTP request for creating a version
 type CreateVersionRequest struct {
-	Version     string         `json:"version" form:"version"`
-	ContentHash string         `json:"content_hash" form:"content_hash"`
-	Metadata    map[string]any `json:"metadata" form:"metadata"`
+	Version     string         `json:"version" validate:"required"`
+	Content     string         `json:"content" validate:"required"` // Base64 encoded content
+	ContentType string         `json:"content_type"`
+	Metadata    map[string]any `json:"metadata"`
 }
 
 // UpdateVersionRequest represents HTTP request for updating a version (metadata only)
@@ -30,4 +31,6 @@ type RejectVersionRequest struct {
 }
 
 // PublishVersionRequest represents HTTP request for publishing a version
-type PublishVersionRequest struct{}
+type PublishVersionRequest struct {
+	Destination string `json:"destination" validate:"required"`
+}

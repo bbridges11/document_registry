@@ -9,5 +9,5 @@ type Actor struct {
 
 // UseCase defines the validation use case interface
 type UseCase interface {
-	ValidateDefinition(ctx context.Context, input ValidateDefinitionInput) (ValidateDefinitionOutput, error)
+	ValidateContent(ctx context.Context, input ValidateContentInput) (ValidateContentOutput, error)
 }

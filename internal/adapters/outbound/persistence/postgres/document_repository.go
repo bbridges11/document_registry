@@ -43,7 +43,7 @@ func (r *DocumentRepository) Save(ctx context.Context, doc *document.Document) (
 		doc.Name(),
 		doc.Description(),
 		doc.Tags(),
-		doc.DocumentType(),
+		doc.DocumentType().Code(),
 		doc.CreatedAt(),
 		doc.UpdatedAt(),
 		doc.CreatedBy(),
@@ -82,7 +82,9 @@ func (r *DocumentRepository) GetByID(ctx context.Context, id uuid.UUID) (doc *do
 	}
 	try.To(err)
 
-	return document.RehydrateDocument(docID, name, description, documentType, createdBy, tags, createdAt, updatedAt), nil
+	parsedType := try.To1(document.ParseDocumentType(documentType))
+
+	return document.RehydrateDocument(docID, name, description, parsedType, createdBy, tags, createdAt, updatedAt), nil
 }
 
 func (r *DocumentRepository) List(ctx context.Context, limit, offset int) (docs []*document.Document, err error) {
@@ -115,7 +117,9 @@ func (r *DocumentRepository) List(ctx context.Context, limit, offset int) (docs 
 		)
 
 		try.To(rows.Scan(&docID, &name, &description, &tags, &documentType, &createdAt, &updatedAt, &createdBy))
-		docs = append(docs, document.RehydrateDocument(docID, name, description, documentType, createdBy, tags, createdAt, updatedAt))
+
+		parsedType := try.To1(document.ParseDocumentType(documentType))
+		docs = append(docs, document.RehydrateDocument(docID, name, description, parsedType, createdBy, tags, createdAt, updatedAt))
 	}
 
 	try.To(rows.Err())
@@ -253,7 +257,6 @@ func (r *DocumentRepository) Search(ctx context.Context, filters outbound.Docume
 			WHERE v.document_id = d.id
 			AND v.status = 'UNDER_REVIEW'
 		)`
-		// Note: Actual permission check would require OpenFGA integration
 	}
 
 	// Special filter: Pending my approval

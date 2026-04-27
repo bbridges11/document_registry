@@ -5,11 +5,21 @@ meta {
 }
 
 post {
-  url: {{base_url}}/users/{{user_id}}/activate
+  url: {{base_url}}/users/{{created_user_id}}/activate
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Activate a previously deactivated user account.
+  
+  Requires admin privileges (X-User-ID must be an admin).
+  
+  Activated users can:
+  - Log in
+  - Perform actions based on their role
 }

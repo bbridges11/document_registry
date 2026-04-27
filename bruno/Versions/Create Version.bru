@@ -7,16 +7,44 @@ meta {
 post {
   url: {{base_url}}/documents/{{document_id}}/versions
   body: json
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
 }
 
 body:json {
   {
-    "version_number": "1.0.0",
-    "change_summary": "Initial version"
+    "version": "1.1.0",
+    "content": "{{file_base64}}",
+    "metadata": {
+      "changelog": "Added authentication service component"
+    }
   }
+}
+
+script:pre-request {
+  const fs = require("fs");
+  const filePath = bru.getVar("file_path") || "./files/pattern-example.yaml";
+  const fileBuffer = fs.readFileSync(filePath);
+  const base64String = fileBuffer.toString("base64");
+  bru.setVar("file_base64", base64String);
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const data = res.body;
+    bru.setVar("version_id", data.version_id);
+  }
+}
+
+docs {
+  Create a new version of an existing document.
+  
+  - Content must be base64 encoded
+  - Version must be unique per document
+  - Starts in DRAFT status
+  - Automatically saves version_id
 }

@@ -1,15 +1,28 @@
 meta {
   name: Get Approval
   type: http
-  seq: 6
+  seq: 3
 }
 
 get {
   url: {{base_url}}/approvals/{{approval_id}}
   body: none
-  auth: bearer
+  auth: none
 }
 
-auth:bearer {
-  token: {{token}}
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get details of a specific approval by ID.
+  
+  Returns:
+  - Approval ID
+  - Version ID
+  - User ID and name
+  - Role
+  - Approved status
+  - Comment
+  - Created timestamp
 }

@@ -18,11 +18,11 @@ func NewFactory() *Factory {
 	return &Factory{}
 }
 
-func (f *Factory) GetWorkflow(documentType string) (Workflow, error) {
-	switch documentType {
-	case "pattern":
+func (f *Factory) GetWorkflow(workflowType Type) (Workflow, error) {
+	switch workflowType {
+	case TypeApprovalBased:
 		return NewPatternWorkflow(), nil
 	default:
-		return nil, errors.New(errors.CodeInvalidArgument, fmt.Sprintf("unknown document type: %s", documentType))
+		return nil, errors.New(errors.CodeInvalidArgument, fmt.Sprintf("unknown workflow type: %s", workflowType))
 	}
 }

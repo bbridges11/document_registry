@@ -8,14 +8,14 @@ Get the Document Registry running locally in **5 minutes**.
 
 Before starting, ensure you have:
 
-- [ ] **Go 1.25+** installed ([Download](https://golang.org/doc/install))
+- [ ] **Go 1.21+** installed ([Download](https://golang.org/doc/install))
 - [ ] **Docker** installed and running ([Download](https://docs.docker.com/get-docker/))
 - [ ] **Make** available (pre-installed on macOS/Linux)
 - [ ] **Git** for cloning the repository
 
 **Verify installations**:
 ```bash
-go version     # Should show 1.25 or higher
+go version      # Should show 1.21 or higher
 docker --version
 make --version
 ```
@@ -38,81 +38,64 @@ make docker-up
 ```
 
 This starts:
-- **PostgreSQL** (localhost:5432)
-- **OpenFGA** (localhost:8081)
-- **LocalStack S3** (localhost:4566)
+- **PostgreSQL 16** (localhost:5432)
+- **LocalStack** (S3 + SNS on localhost:4566)
 
 Wait for services to be ready (~30 seconds).
 
-### Step 3: Setup OpenFGA Store (30 seconds)
-
-```bash
-make openfga-setup
-```
-
-**⚠️ IMPORTANT**: Copy the `OPENFGA_STORE_ID` from the output. You'll need it in Step 4.
-
-Example output:
-```
-✓ Store created successfully
-
-Add this to your .env file:
-OPENFGA_STORE_ID=01HXXXXXXXXXXXXXXXXXXX
-```
-
-### Step 4: Create Configuration File (1 minute)
+### Step 3: Create Configuration File (1 minute)
 
 Create `.env` file in the project root:
 
 ```bash
 cat > .env << 'EOF'
-# Server
-HTTP_PORT=8080
-ENV=local
-
-# Database
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=document_registry
-
-# OpenFGA (REPLACE WITH YOUR STORE ID FROM STEP 3)
-OPENFGA_ENABLED=false
-OPENFGA_URL=http://localhost:8081
-OPENFGA_STORE_ID=<PASTE-YOUR-STORE-ID-HERE>
-
-# AWS/S3 (LocalStack)
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=test
-AWS_SECRET_ACCESS_KEY=test
-AWS_S3_ENDPOINT=http://localhost:4566
-AWS_S3_BUCKET=document-registry
-AWS_S3_FORCE_PATH_STYLE=true
+# Application
+DOCUMENT_REGISTRY_PROFILE=local
+DOCUMENT_REGISTRY_APP_NAME=document-registry
 
 # Logging
-LOG_LEVEL=info
-LOG_FORMAT=console
+DOCUMENT_REGISTRY_LOG_LEVEL=info
+DOCUMENT_REGISTRY_LOG_FORMAT=console
+
+# Server
+DOCUMENT_REGISTRY_HTTP_PORT=8080
+
+# Database (connects to docker-compose Postgres)
+DOCUMENT_REGISTRY_POSTGRES_HOST=localhost
+DOCUMENT_REGISTRY_POSTGRES_PORT=5432
+DOCUMENT_REGISTRY_POSTGRES_DATABASE=document_registry
+DOCUMENT_REGISTRY_POSTGRES_USER=postgres
+DOCUMENT_REGISTRY_POSTGRES_PASSWORD=postgres
+DOCUMENT_REGISTRY_POSTGRES_SSL_MODE=disable
+
+# AWS Region (standard AWS SDK variable works)
+AWS_REGION=us-east-1
+
+# S3 (LocalStack)
+DOCUMENT_REGISTRY_S3_BUCKET=document-registry
+DOCUMENT_REGISTRY_S3_ENDPOINT=http://localhost:4566
+
+# SNS (LocalStack - disabled by default)
+DOCUMENT_REGISTRY_SNS_ENABLED=false
+DOCUMENT_REGISTRY_SNS_ENDPOINT=http://localhost:4566
 EOF
 ```
 
-**Replace `<PASTE-YOUR-STORE-ID-HERE>` with your actual store ID from Step 3!**
-
-### Step 5: Create S3 Bucket (15 seconds)
+### Step 4: Create S3 Bucket (15 seconds)
 
 ```bash
 make s3-create-bucket
 ```
 
-### Step 6: Run Database Migrations (30 seconds)
+### Step 5: Run Database Migrations (30 seconds)
 
 ```bash
 make db-migrate
 ```
 
-This creates all required tables.
+This creates all required tables using the consolidated migration.
 
-### Step 7: Start the Application (15 seconds)
+### Step 6: Start the Application (15 seconds)
 
 ```bash
 make run
@@ -120,11 +103,11 @@ make run
 
 You should see:
 ```
-INFO  Starting Document Registry
-INFO  Server listening on :8080
+INFO  Starting Document Registry  {"profile": "local"}
+INFO  Server listening             {"port": 8080}
 ```
 
-### Step 8: Verify It's Working (15 seconds)
+### Step 7: Verify It's Working (15 seconds)
 
 Open a new terminal and run:
 
@@ -134,41 +117,77 @@ curl http://localhost:8080/health
 
 Expected response:
 ```json
-{"status":"healthy"}
+{
+  "status": "healthy",
+  "checks": {
+    "postgres": "healthy",
+    "s3": "healthy"
+  },
+  "timestamp": "2026-04-26T21:00:00Z"
+}
 ```
 
 ---
 
 ## ✅ Success! What's Next?
 
-### Try the API
+### Try Creating a Document
 
 ```bash
-# Create a document
+# Create a pattern document with YAML content
+CONTENT=$(echo 'kind: Pattern
+version: v1
+components:
+  - name: api-gateway
+    type: service' | base64)
+
 curl -X POST http://localhost:8080/documents \
-  -H "Authorization: Bearer test-token" \
+  -H "X-User-ID: user-123" \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "My First Document",
-    "type": "policy",
-    "description": "Testing the API"
-  }'
+  -d "{
+    \"name\": \"API Gateway Pattern\",
+    \"description\": \"Standard API gateway pattern\",
+    \"document_type\": \"pattern\",
+    \"tags\": [\"api\", \"gateway\"],
+    \"version\": \"1.0.0\",
+    \"content\": \"$CONTENT\"
+  }"
 ```
 
-### Use Postman
+### Check Health Endpoints
 
-1. Import `postman/document-registry.postman_collection.json`
-2. Import `postman/local.postman_environment.json`
-3. Set token to `test-token` in environment
-4. Start making requests!
+```bash
+# ALB health check (Postgres + S3)
+curl http://localhost:8080/health
 
-### Explore the Features
+# Liveness probe
+curl http://localhost:8080/health/live
 
-- **Documents**: Create, search, update documents
-- **Versions**: Version control with approval workflow
-- **Deprecation**: Mark old versions as deprecated
-- **Search**: Full-text search with filters
-- **Stakeholders**: Manage document collaborators
+# Full readiness check (Postgres + S3 + SNS)
+curl http://localhost:8080/health/ready
+
+# Startup check
+curl http://localhost:8080/health/startup
+```
+
+### List Documents
+
+```bash
+curl http://localhost:8080/documents \
+  -H "X-User-ID: user-123"
+```
+
+### Search Documents
+
+```bash
+# Search by tag
+curl "http://localhost:8080/documents/search?tags=api" \
+  -H "X-User-ID: user-123"
+
+# Search by name
+curl "http://localhost:8080/documents/search?name=Gateway" \
+  -H "X-User-ID: user-123"
+```
 
 ---
 
@@ -184,6 +203,13 @@ Press `Ctrl+C` in the terminal where `make run` is running.
 make docker-down
 ```
 
+This stops and removes:
+- PostgreSQL container
+- LocalStack container
+- Network
+
+**Note:** Data is preserved in Docker volumes. Restart with `make docker-up` to restore.
+
 ---
 
 ## 🔄 Restarting Later
@@ -194,14 +220,14 @@ When you come back later:
 # Start infrastructure
 make docker-up
 
-# Wait 5 seconds for services to be ready
-sleep 5
+# Wait 10 seconds for services to be ready
+sleep 10
 
 # Start the app
 make run
 ```
 
-No need to run migrations or setup OpenFGA again!
+**Pro tip:** Use `make dev-full` to do everything except creating .env
 
 ---
 
@@ -214,43 +240,70 @@ No need to run migrations or setup OpenFGA again!
 lsof -i :8080
 
 # Use different port
-HTTP_PORT=8081 make run
+echo "DOCUMENT_REGISTRY_HTTP_PORT=8081" >> .env
+make run
 ```
 
 ### "Cannot connect to PostgreSQL"
 
 ```bash
+# Check PostgreSQL status
+docker ps | grep postgres
+
+# View logs
+make docker-postgres-logs
+
 # Restart PostgreSQL
-make docker-postgres-stop
-make docker-postgres
-
-# Wait 5 seconds
-sleep 5
-
-# Try again
+make docker-down
+make docker-up
+sleep 10
 make run
+```
+
+### "S3 bucket not found"
+
+```bash
+# Recreate bucket
+make s3-create-bucket
+
+# Verify bucket exists
+make s3-list-buckets
 ```
 
 ### "Migration failed"
 
 ```bash
-# Reset database
+# Check current migration version
+make db-status
+
+# Reset database (WARNING: deletes all data)
 make db-reset
-
-# Wait 5 seconds
-sleep 5
-
-# Run migrations again
 make db-migrate
 ```
 
-### "Store not found"
+### Health Check Fails
 
 ```bash
-# Create new store
-make openfga-setup
+# Check individual services
+curl http://localhost:8080/health/ready | jq .
 
-# Copy the new STORE_ID to .env
+# Example healthy response:
+# {
+#   "status": "ready",
+#   "checks": {
+#     "postgres": "healthy",
+#     "s3": "healthy",
+#     "sns": "disabled"
+#   },
+#   "timestamp": "2026-04-26T21:00:00Z"
+# }
+
+# If postgres is unhealthy:
+make docker-postgres-logs
+
+# If s3 is unhealthy:
+make docker-localstack-logs
+make s3-create-bucket
 ```
 
 ### Still Having Issues?
@@ -258,6 +311,11 @@ make openfga-setup
 ```bash
 # Clean everything and start fresh
 make docker-clean
+
+# This removes:
+# - All containers
+# - All volumes (deletes data!)
+# - All networks
 
 # Start over from Step 2
 make docker-up
@@ -274,6 +332,7 @@ make docker-up
 | `make run` | Start the application |
 | `make db-migrate` | Run database migrations |
 | `make health` | Check all service health |
+| `make s3-create-bucket` | Create S3 bucket in LocalStack |
 | `make help` | Show all available commands |
 
 ---
@@ -281,9 +340,10 @@ make docker-up
 ## 🎓 Learning More
 
 - **Full README**: See `README.md` for complete documentation
-- **API Guide**: See `postman/README.md` for API testing
+- **API Guide**: See `README.md#api-documentation` for all endpoints
 - **Architecture**: See `ARCHITECTURE.md` for design patterns
-- **Deprecation Feature**: See `docs/DEPRECATION_FEATURE_COMPLETE.md`
+- **Migrations**: See `MIGRATIONS.md` for database schema management
+- **Environment Variables**: See `ENV_MIGRATION.md` for configuration guide
 
 ---
 
@@ -297,7 +357,9 @@ Instead of Steps 2-5, you can use:
 make dev-full
 ```
 
-This does everything except creating the `.env` file.
+This runs: `docker-up` → `db-migrate` → `s3-create-bucket` → `run`
+
+You still need to create `.env` file first!
 
 ### Check Service Health
 
@@ -306,18 +368,18 @@ make health
 ```
 
 Shows status of all services:
+- Document Registry (all health endpoints)
 - PostgreSQL
-- OpenFGA
-- Document Registry
+- LocalStack (S3)
 
 ### View Logs
 
 ```bash
+# Application logs (if running in background)
+tail -f logs/app.log
+
 # PostgreSQL
 make docker-postgres-logs
-
-# OpenFGA
-make docker-openfga-logs
 
 # LocalStack
 make docker-localstack-logs
@@ -329,7 +391,31 @@ make docker-localstack-logs
 make db-shell
 ```
 
-Connects you to the PostgreSQL database.
+Opens `psql` connected to the database. Try:
+```sql
+-- List all documents
+SELECT id, name, document_type FROM documents;
+
+-- List all versions
+SELECT id, document_id, version, status FROM versions;
+```
+
+Type `\q` to exit.
+
+### Working with S3
+
+```bash
+# List buckets
+make s3-list-buckets
+
+# List objects in bucket
+aws --endpoint-url=http://localhost:4566 s3 ls s3://document-registry/
+
+# Download a document version content
+aws --endpoint-url=http://localhost:4566 s3 cp \
+  s3://document-registry/pattern/{document-id}/{version}/content \
+  ./downloaded-content.yaml
+```
 
 ---
 
@@ -338,7 +424,8 @@ Connects you to the PostgreSQL database.
 The Document Registry is now running at:
 - **API**: http://localhost:8080
 - **Health Check**: http://localhost:8080/health
-- **OpenFGA Playground**: http://localhost:3000
+- **Liveness**: http://localhost:8080/health/live
+- **Readiness**: http://localhost:8080/health/ready
 
 **Happy building!** 🚀
 
@@ -346,9 +433,10 @@ The Document Registry is now running at:
 
 ## 📚 Next Steps
 
-1. **Explore the API** - Use the Postman collection
+1. **Try the API** - Create documents, versions, and test workflows
 2. **Read the docs** - Check out `README.md` for full details
-3. **Try the features** - Create documents, versions, and test deprecation
-4. **Build something** - Integrate with your application!
+3. **Explore features** - Test validation, approval, and deprecation
+4. **Add document types** - See `MIGRATIONS.md` for extending the type system
+5. **Deploy to ECS** - See `README.md#deployment` for production setup
 
 Need help? Check the full `README.md` or open an issue on GitHub.

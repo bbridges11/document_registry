@@ -31,16 +31,6 @@ func (s *CommandService) RequestDeprecation(ctx context.Context, cmd RequestDepr
 		return nil, errors.New(errors.CodeConflict, "deprecation request already pending for this version")
 	}
 
-	// Authorization check - verify user can request deprecation (creator/owner/admin)
-	// Users who can request deprecation:
-	// 1. Document creator
-	// 2. Document owners (stakeholders with owner role)
-	// 3. System admins
-	canRequest := try.To1(s.authz.CanRequestDeprecation(ctx, cmd.RequestedBy, cmd.VersionID.String()))
-	if !canRequest {
-		return nil, errors.New(errors.CodeCannotDeprecate, "user not authorized to request deprecation for this version")
-	}
-
 	// Create entities and update in transaction
 	try.To(s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
 		// Create deprecation entity
@@ -87,15 +77,6 @@ func (s *CommandService) ApproveDeprecation(ctx context.Context, cmd ApproveDepr
 	// Get version
 	ver := try.To1(s.versionRepo.GetByID(ctx, cmd.VersionID))
 
-	// Authorization check - verify user can approve deprecation (has approver role)
-	// Users who can approve deprecation:
-	// 1. Users with "deprecation-approver" role
-	// 2. System admins
-	canApprove := try.To1(s.authz.CanApproveDeprecation(ctx, cmd.ApprovedBy, cmd.VersionID.String()))
-	if !canApprove {
-		return errors.ErrForbidden
-	}
-
 	// Update entities in transaction
 	try.To(s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
 		// Approve deprecation
@@ -138,15 +119,6 @@ func (s *CommandService) RejectDeprecation(ctx context.Context, cmd RejectDeprec
 	// Get version
 	ver := try.To1(s.versionRepo.GetByID(ctx, cmd.VersionID))
 
-	// Authorization check - verify user can reject deprecation (has approver role)
-	// Users who can reject deprecation:
-	// 1. Users with "deprecation-approver" role
-	// 2. System admins
-	canReject := try.To1(s.authz.CanApproveDeprecation(ctx, cmd.RejectedBy, cmd.VersionID.String()))
-	if !canReject {
-		return errors.ErrForbidden
-	}
-
 	// Parse previous status
 	prevStatus := workflow.Status(dep.PreviousStatus())
 
@@ -188,15 +160,6 @@ func (s *CommandService) CancelDeprecation(ctx context.Context, cmd CancelDeprec
 
 	// Get version
 	ver := try.To1(s.versionRepo.GetByID(ctx, cmd.VersionID))
-
-	// Authorization check - verify user can cancel (original requestor or admin)
-	// Users who can cancel deprecation:
-	// 1. Original requestor (the user who requested the deprecation)
-	// 2. System admins
-	canCancel := try.To1(s.authz.CanCancelDeprecation(ctx, cmd.CanceledBy, cmd.VersionID.String(), dep.RequestedBy()))
-	if !canCancel {
-		return errors.ErrForbidden
-	}
 
 	// Parse previous status
 	prevStatus := workflow.Status(dep.PreviousStatus())

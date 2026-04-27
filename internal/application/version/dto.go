@@ -13,6 +13,7 @@ type CreateVersionCommand struct {
 	DocumentID  uuid.UUID
 	Version     string
 	Content     io.Reader
+	ContentType string
 	ContentHash string
 	Metadata    map[string]any
 	CreatedBy   string
@@ -21,6 +22,7 @@ type CreateVersionCommand struct {
 type UpdateVersionCommand struct {
 	ID          uuid.UUID
 	Content     io.Reader
+	ContentType string
 	ContentHash string
 	Metadata    map[string]any
 	UpdatedBy   string
@@ -52,6 +54,7 @@ type RejectVersionCommand struct {
 type PublishVersionCommand struct {
 	ID          uuid.UUID
 	PublishedBy string
+	Destination string // Where to publish (e.g., "dev-portal", "prod-gateway")
 }
 
 type GetVersionQuery struct {
@@ -71,16 +74,16 @@ type GetVersionApprovalsQuery struct {
 }
 
 type VersionDTO struct {
-	ID           uuid.UUID
-	DocumentID   uuid.UUID
-	Version      string
-	Status       workflow.Status
-	ContentS3Key string
-	ContentHash  string
-	Metadata     map[string]any
-	CreatedBy    string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID          uuid.UUID
+	DocumentID  uuid.UUID
+	Version     string
+	Status      workflow.Status
+	ContentKey  string // Generic key - abstracted from storage backend
+	ContentHash string
+	Metadata    map[string]any
+	CreatedBy   string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type VersionStatusDTO struct {

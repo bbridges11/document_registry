@@ -9,7 +9,6 @@ COMPOSE_PROJECT := document-registry
 
 # Service names from docker-compose.yml
 POSTGRES_CONTAINER := document-registry-postgres
-OPENFGA_CONTAINER := document-registry-openfga
 LOCALSTACK_CONTAINER := document-registry-localstack
 
 # Colors for output
@@ -86,23 +85,6 @@ docker-postgres-stop: ## Stop PostgreSQL service
 docker-postgres-logs: ## Show PostgreSQL logs
 	$(DOCKER_COMPOSE) logs -f postgres
 
-.PHONY: docker-openfga
-docker-openfga: ## Start only OpenFGA service
-	@echo "$(BLUE)Starting OpenFGA...$(NC)"
-	$(DOCKER_COMPOSE) up -d openfga
-	@echo "$(GREEN)✓ OpenFGA started$(NC)"
-	@echo "  - API: http://localhost:8081"
-	@echo "  - Playground: http://localhost:3000"
-
-.PHONY: docker-openfga-stop
-docker-openfga-stop: ## Stop OpenFGA service
-	@echo "$(YELLOW)Stopping OpenFGA...$(NC)"
-	$(DOCKER_COMPOSE) stop openfga
-	@echo "$(GREEN)✓ OpenFGA stopped$(NC)"
-
-.PHONY: docker-openfga-logs
-docker-openfga-logs: ## Show OpenFGA logs
-	$(DOCKER_COMPOSE) logs -f openfga
 
 .PHONY: docker-localstack
 docker-localstack: ## Start only LocalStack service
@@ -132,11 +114,8 @@ docker-up: ## Start all infrastructure containers with docker-compose
 	@echo ""
 	@echo "$(BLUE)Service URLs:$(NC)"
 	@echo "  - PostgreSQL: localhost:5432"
-	@echo "  - OpenFGA API: http://localhost:8081"
-	@echo "  - OpenFGA Playground: http://localhost:3000"
 	@echo "  - LocalStack S3: http://localhost:4566"
 	@echo ""
-	@echo "$(YELLOW)Next: Run 'make openfga-setup' to create store$(NC)"
 
 .PHONY: docker-down
 docker-down: ## Stop all infrastructure containers
@@ -171,41 +150,6 @@ docker-pull: ## Pull latest images
 	$(DOCKER_COMPOSE) pull
 	@echo "$(GREEN)✓ Images pulled$(NC)"
 
-##@ OpenFGA Setup
-
-.PHONY: openfga-setup
-openfga-setup: ## Create OpenFGA store (run after docker-openfga)
-	@echo "$(BLUE)Creating OpenFGA store...$(NC)"
-	@STORE_ID=$$(curl -s -X POST http://localhost:8081/stores \
-		-H "Content-Type: application/json" \
-		-d '{"name": "document-registry"}' | grep -o '"id":"[^"]*' | cut -d'"' -f4); \
-	if [ -z "$$STORE_ID" ]; then \
-		echo "$(RED)✗ Failed to create store$(NC)"; \
-		exit 1; \
-	else \
-		echo "$(GREEN)✓ Store created successfully$(NC)"; \
-		echo ""; \
-		echo "$(YELLOW)Add this to your .env file:$(NC)"; \
-		echo "OPENFGA_STORE_ID=$$STORE_ID"; \
-		echo ""; \
-		echo "$(BLUE)Or run:$(NC)"; \
-		echo "export OPENFGA_STORE_ID=$$STORE_ID"; \
-	fi
-
-.PHONY: openfga-list-stores
-openfga-list-stores: ## List all OpenFGA stores
-	@echo "$(BLUE)OpenFGA Stores:$(NC)"
-	@curl -s http://localhost:8081/stores | jq '.'
-
-.PHONY: openfga-health
-openfga-health: ## Check OpenFGA health
-	@echo "$(BLUE)Checking OpenFGA health...$(NC)"
-	@curl -s http://localhost:8081/healthz && echo "$(GREEN)✓ OpenFGA is healthy$(NC)" || echo "$(RED)✗ OpenFGA is not responding$(NC)"
-
-.PHONY: openfga-playground
-openfga-playground: ## Open OpenFGA Playground in browser
-	@echo "$(BLUE)Opening OpenFGA Playground...$(NC)"
-	@open http://localhost:3000 || xdg-open http://localhost:3000 || echo "Open http://localhost:3000 in your browser"
 
 ##@ Database Operations
 
@@ -324,10 +268,6 @@ health: ## Check all service health endpoints
 	@echo ""
 	@echo "$(YELLOW)PostgreSQL:$(NC)"
 	@$(DOCKER) exec $(POSTGRES_CONTAINER) pg_isready -U postgres && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Unhealthy$(NC)"
-	@echo ""
-	@echo "$(YELLOW)OpenFGA:$(NC)"
-	@curl -s http://localhost:8081/healthz > /dev/null && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Unhealthy$(NC)"
-	@echo ""
 	@echo "$(YELLOW)Document Registry:$(NC)"
 	@curl -s http://localhost:8080/health > /dev/null && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Not running$(NC)"
 
@@ -337,10 +277,6 @@ ports: ## Check if required ports are available
 	@echo ""
 	@echo "$(YELLOW)Port 8080 (Document Registry):$(NC)"
 	@lsof -i :8080 > /dev/null 2>&1 && echo "$(RED)✗ In use$(NC)" || echo "$(GREEN)✓ Available$(NC)"
-	@echo ""
-	@echo "$(YELLOW)Port 8081 (OpenFGA):$(NC)"
-	@lsof -i :8081 > /dev/null 2>&1 && echo "$(RED)✗ In use$(NC)" || echo "$(GREEN)✓ Available$(NC)"
-	@echo ""
 	@echo "$(YELLOW)Port 5432 (PostgreSQL):$(NC)"
 	@lsof -i :5432 > /dev/null 2>&1 && echo "$(RED)✗ In use$(NC)" || echo "$(GREEN)✓ Available$(NC)"
 	@echo ""
@@ -364,13 +300,12 @@ dev: docker-up ## Start full development environment (Docker + App)
 	@echo "  make dev-full"
 
 .PHONY: dev-full
-dev-full: docker-up openfga-setup s3-create-bucket ## Full dev setup (Docker + OpenFGA store + S3)
+dev-full: docker-up s3-create-bucket ## Full dev setup (Docker + S3)
 	@echo ""
 	@echo "$(GREEN)✓ Development environment ready!$(NC)"
 	@echo ""
 	@echo "$(BLUE)Next steps:$(NC)"
-	@echo "  1. Copy OPENFGA_STORE_ID to your .env file"
-	@echo "  2. Run: make run"
+	@echo "  1. Run: make run"
 
 .PHONY: stop
 stop: docker-down ## Stop all services
@@ -393,17 +328,9 @@ quickstart: ## Quick start guide
 	@echo ""
 	@echo "$(GREEN)1. Start infrastructure:$(NC)"
 	@echo "   make docker-up"
-	@echo ""
-	@echo "$(GREEN)2. Setup OpenFGA:$(NC)"
-	@echo "   make openfga-setup"
-	@echo ""
 	@echo "$(GREEN)3. Create S3 bucket:$(NC)"
 	@echo "   make s3-create-bucket"
-	@echo ""
-	@echo "$(GREEN)4. Configure environment:$(NC)"
-	@echo "   - Copy .env.example to .env"
-	@echo "   - Add OPENFGA_STORE_ID from step 2"
-	@echo ""
+
 	@echo "$(GREEN)5. Run the application:$(NC)"
 	@echo "   make run"
 	@echo ""

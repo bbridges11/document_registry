@@ -3,11 +3,13 @@ package bootstrap
 import (
 	"context"
 
-	"github.com/bbridges_11/document-registry/internal/adapters/outbound/authorization/openfga"
-	"github.com/bbridges_11/document-registry/internal/adapters/outbound/notification/sns"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sns"
+	notificationSNS "github.com/bbridges_11/document-registry/internal/adapters/outbound/notification/sns"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/persistence/postgres"
-	"github.com/bbridges_11/document-registry/internal/adapters/outbound/storage/s3"
-	useradapter "github.com/bbridges_11/document-registry/internal/adapters/outbound/user"
+	"github.com/bbridges_11/document-registry/internal/adapters/outbound/publisher/mock"
+	"github.com/bbridges_11/document-registry/internal/adapters/outbound/storage"
+	storageS3 "github.com/bbridges_11/document-registry/internal/adapters/outbound/storage/s3"
 	"github.com/bbridges_11/document-registry/internal/platform/aws"
 	"github.com/bbridges_11/document-registry/internal/platform/config"
 	dbPostgres "github.com/bbridges_11/document-registry/internal/platform/database/postgres"
@@ -27,10 +29,13 @@ type infrastructure struct {
 	ApprovalRepo        outbound.ApprovalRepository
 	UserRepo            outbound.UserRepository
 	DeprecationRepo     outbound.DeprecationRepository
+	PublicationRepo     outbound.PublicationRepository
 	StorageService      outbound.StorageService
-	AuthzService        outbound.AuthorizationService
-	UserService         outbound.UserService
+	PublisherService    outbound.PublisherService
 	NotificationService outbound.NotificationService
+	S3Client            *s3.Client
+	SNSClient           *sns.Client
+	AWSConfig           config.AWSConfig
 }
 
 func wireConfigAndLogger() (*config.Config, *zap.Logger) {
@@ -49,9 +54,31 @@ func wireInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 
 	var runner *dbPostgres.Runner
 	if cfg.Database.Driver == config.DatabaseDriverPostgres {
-		pool := try.To1(dbPostgres.NewPool(ctx, cfg.Database.Postgres))
+		// Pass profile and AWS region to pool creation
+		pool := try.To1(dbPostgres.NewPool(
+			ctx,
+			cfg.Database.Postgres,
+			cfg.App.Profile,
+			cfg.AWS.Region,
+		))
 		runner = dbPostgres.NewRunner(pool)
-		log.Info("postgres pool initialized")
+
+		// Log connection method
+		if cfg.Database.Postgres.IsCloudProfile(cfg.App.Profile) {
+			log.Info("postgres pool initialized with IAM authentication",
+				zap.String("host", cfg.Database.Postgres.Host),
+				zap.Int("port", cfg.Database.Postgres.Port),
+				zap.String("database", cfg.Database.Postgres.Database),
+				zap.String("user", cfg.Database.Postgres.User),
+				zap.String("region", cfg.AWS.Region),
+			)
+		} else {
+			log.Info("postgres pool initialized with password authentication",
+				zap.String("host", cfg.Database.Postgres.Host),
+				zap.Int("port", cfg.Database.Postgres.Port),
+				zap.String("database", cfg.Database.Postgres.Database),
+			)
+		}
 	}
 
 	s3Client := try.To1(aws.NewS3Client(ctx, cfg.AWS))
@@ -66,7 +93,7 @@ func wireInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 	try.To(eventBus.Start(ctx))
 	log.Info("event bus started")
 
-	authzService := try.To1(openfga.NewAuthorizationAdapter(cfg.OpenFGA, log))
+	publisherService := mock.NewPublisherAdapter(log)
 
 	return &infrastructure{
 		Runner:              runner,
@@ -77,9 +104,12 @@ func wireInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 		ApprovalRepo:        postgres.NewApprovalRepository(runner),
 		UserRepo:            postgres.NewUserRepository(runner),
 		DeprecationRepo:     postgres.NewDeprecationRepository(runner),
-		StorageService:      s3.NewStorageAdapter(s3Client, cfg.AWS.S3),
-		AuthzService:        authzService,
-		UserService:         useradapter.NewServiceAdapter(cfg.User),
-		NotificationService: sns.NewSNSAdapter(snsClient, cfg.AWS.SNS, log),
+		StorageService:      storage.NewRouter(storageS3.NewBackend(s3Client, cfg.AWS.S3)),
+		NotificationService: notificationSNS.NewSNSAdapter(snsClient, cfg.AWS.SNS, log),
+		PublisherService:    publisherService,
+		PublicationRepo:     postgres.NewPublicationRepository(runner),
+		S3Client:            s3Client,
+		SNSClient:           snsClient,
+		AWSConfig:           cfg.AWS,
 	}
 }

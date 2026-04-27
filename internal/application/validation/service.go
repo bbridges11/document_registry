@@ -20,8 +20,8 @@ func NewService(contentValidator outbound.ContentValidator) UseCase {
 	}
 }
 
-// ValidateDefinition validates definition file content
-func (s *Service) ValidateDefinition(ctx context.Context, input ValidateDefinitionInput) (output ValidateDefinitionOutput, err error) {
+// ValidateContent validates document content
+func (s *Service) ValidateContent(ctx context.Context, input ValidateContentInput) (output ValidateContentOutput, err error) {
 	defer err2.Handle(&err)
 
 	// Call validator
@@ -31,7 +31,7 @@ func (s *Service) ValidateDefinition(ctx context.Context, input ValidateDefiniti
 	}))
 
 	// Map to output
-	output = ValidateDefinitionOutput{
+	output = ValidateContentOutput{
 		Valid:  result.Valid,
 		Issues: make([]ValidationIssue, 0, len(result.Issues)),
 	}

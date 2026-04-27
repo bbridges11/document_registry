@@ -7,10 +7,10 @@ import (
 )
 
 func toVersionEntityView(ver *domainVersion.Version) VersionView {
-	return VersionView{ID: ver.ID(), DocumentID: ver.DocumentID(), Version: ver.Version().String(), Status: ver.Status().String(), ContentKey: ver.ContentS3Key(), ContentHash: ver.ContentHash(), Metadata: ver.Metadata(), CreatedBy: ver.CreatedBy(), CreatedAt: ver.CreatedAt(), UpdatedAt: ver.UpdatedAt()}
+	return VersionView{ID: ver.ID(), DocumentID: ver.DocumentID(), Version: ver.Version().String(), Status: ver.Status().String(), ContentKey: ver.ContentRef().Location(), ContentHash: ver.ContentHash(), Metadata: ver.Metadata(), CreatedBy: ver.CreatedBy(), CreatedAt: ver.CreatedAt(), UpdatedAt: ver.UpdatedAt()}
 }
 func toVersionDTOView(dto *VersionDTO) VersionView {
-	return VersionView{ID: dto.ID, DocumentID: dto.DocumentID, Version: dto.Version, Status: dto.Status.String(), ContentKey: dto.ContentS3Key, ContentHash: dto.ContentHash, Metadata: dto.Metadata, CreatedBy: dto.CreatedBy, CreatedAt: dto.CreatedAt, UpdatedAt: dto.UpdatedAt}
+	return VersionView{ID: dto.ID, DocumentID: dto.DocumentID, Version: dto.Version, Status: dto.Status.String(), ContentKey: dto.ContentKey, ContentHash: dto.ContentHash, Metadata: dto.Metadata, CreatedBy: dto.CreatedBy, CreatedAt: dto.CreatedAt, UpdatedAt: dto.UpdatedAt}
 }
 func stringifyRoleMap(in map[domainApproval.ApprovalRole]int) map[string]int {
 	out := make(map[string]int, len(in))

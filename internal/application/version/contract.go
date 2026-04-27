@@ -52,8 +52,9 @@ type RejectInput struct {
 	Reason string
 }
 type PublishInput struct {
-	Actor Actor
-	ID    uuid.UUID
+	Actor       Actor
+	ID          uuid.UUID
+	Destination string
 }
 type GetStatusInput struct {
 	Actor Actor

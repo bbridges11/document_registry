@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/bbridges_11/document-registry/internal/ports/outbound"
-	"github.com/bbridges_11/document-registry/pkg/errors"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
 )
@@ -12,18 +11,16 @@ import (
 type QueryService struct {
 	repo        outbound.DocumentRepository
 	versionRepo outbound.VersionRepository
-	authz       outbound.AuthorizationService
 }
 
 func NewQueryService(
 	repo outbound.DocumentRepository,
 	versionRepo outbound.VersionRepository,
-	authz outbound.AuthorizationService,
+
 ) *QueryService {
 	return &QueryService{
 		repo:        repo,
 		versionRepo: versionRepo,
-		authz:       authz,
 	}
 }
 
@@ -41,17 +38,11 @@ func (s *QueryService) GetDocument(ctx context.Context, query GetDocumentQuery, 
 			Name:         doc.Name(),
 			Description:  doc.Description(),
 			Tags:         doc.Tags(),
-			DocumentType: doc.DocumentType(),
+			DocumentType: doc.DocumentType().String(),
 			CreatedAt:    doc.CreatedAt(),
 			UpdatedAt:    doc.UpdatedAt(),
 			CreatedBy:    doc.CreatedBy(),
 		}, nil
-	}
-
-	// Not published - check authorization
-	allowed := try.To1(s.authz.CanAccessDocument(ctx, userID, query.ID.String()))
-	if !allowed {
-		return nil, errors.ErrForbidden
 	}
 
 	return &DocumentDTO{
@@ -59,7 +50,7 @@ func (s *QueryService) GetDocument(ctx context.Context, query GetDocumentQuery, 
 		Name:         doc.Name(),
 		Description:  doc.Description(),
 		Tags:         doc.Tags(),
-		DocumentType: doc.DocumentType(),
+		DocumentType: doc.DocumentType().String(),
 		CreatedAt:    doc.CreatedAt(),
 		UpdatedAt:    doc.UpdatedAt(),
 		CreatedBy:    doc.CreatedBy(),
@@ -74,22 +65,13 @@ func (s *QueryService) ListDocuments(ctx context.Context, query ListDocumentsQue
 	dtos = make([]*DocumentDTO, 0, len(docs))
 	for _, doc := range docs {
 		// Check if document has published version (public access)
-		hasPublished := try.To1(s.versionRepo.HasPublishedVersion(ctx, doc.ID()))
-
-		if !hasPublished {
-			// Not published - filter by authorization
-			allowed := try.To1(s.authz.CanAccessDocument(ctx, userID, doc.ID().String()))
-			if !allowed {
-				continue
-			}
-		}
 
 		dtos = append(dtos, &DocumentDTO{
 			ID:           doc.ID(),
 			Name:         doc.Name(),
 			Description:  doc.Description(),
 			Tags:         doc.Tags(),
-			DocumentType: doc.DocumentType(),
+			DocumentType: doc.DocumentType().String(),
 			CreatedAt:    doc.CreatedAt(),
 			UpdatedAt:    doc.UpdatedAt(),
 			CreatedBy:    doc.CreatedBy(),
@@ -174,22 +156,6 @@ func (s *QueryService) SearchDocuments(ctx context.Context, input SearchInput) (
 			continue
 		}
 
-		// Not published - check authorization
-		allowed := try.To1(s.authz.CanAccessDocument(ctx, input.Actor.UserID, result.ID.String()))
-		if allowed {
-			authorizedResults = append(authorizedResults, DocumentSearchResult{
-				ID:                  result.ID,
-				Name:                result.Name,
-				Description:         result.Description,
-				DocumentType:        result.DocumentType,
-				Tags:                result.Tags,
-				CreatedBy:           result.CreatedBy,
-				CreatedAt:           result.CreatedAt,
-				UpdatedAt:           result.UpdatedAt,
-				LatestVersion:       result.LatestVersion,
-				LatestVersionStatus: result.LatestVersionStatus,
-			})
-		}
 	}
 
 	// Calculate pagination info

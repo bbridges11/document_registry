@@ -1,0 +1,22 @@
+meta {
+  name: Readiness Check
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/health/ready
+  body: none
+  auth: none
+}
+
+docs {
+  Deep Readiness Check
+  
+  Checks all dependencies:
+  - Postgres
+  - S3
+  - SNS (if enabled)
+  
+  Used for monitoring dashboards.
+}
