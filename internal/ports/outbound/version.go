@@ -11,6 +11,7 @@ import (
 type VersionRepository interface {
 	Save(ctx context.Context, ver *version.Version) error
 	GetByID(ctx context.Context, id uuid.UUID) (*version.Version, error)
+	GetByIDForUpdate(ctx context.Context, id uuid.UUID) (*version.Version, error)
 	GetByDocumentIDAndVersion(ctx context.Context, documentID uuid.UUID, version string) (*version.Version, error)
 	ListByDocumentID(ctx context.Context, documentID uuid.UUID) ([]*version.Version, error)
 	GetLatestByDocumentID(ctx context.Context, documentID uuid.UUID) (*version.Version, error)

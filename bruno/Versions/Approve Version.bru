@@ -17,19 +17,28 @@ headers {
 
 body:json {
   {
-    "comment": "Approved - looks good",
-    "role": "engineer"
+    "comment": "Approved - looks good"
   }
 }
 
 docs {
   Approve a version.
   
-  Roles:
-  - engineer
-  - architect
-  - product_manager
+  Authorization:
+  - User must have approval roles (admin, architect, or engineer)
+  - Approval role is automatically determined from user's role
+  - Admin users approve as "technical" (first available role)
+  - Architect users approve as "architect"
+  - Engineer users approve as "technical"
   
-  Multiple approvals may be required based on approval policy.
-  Version moves to APPROVED when all required approvals received.
+  State Transitions:
+  - If version is SUBMITTED: auto-transitions to IN_REVIEW, then creates approval
+  - If version is IN_REVIEW: creates approval
+  - When all required approvals collected: transitions to APPROVED
+  
+  Pattern document type requires:
+  - 1 technical approval (from engineer or admin)
+  - 1 architect approval (from architect or admin)
+  
+  Note: Same user cannot approve with multiple roles
 }

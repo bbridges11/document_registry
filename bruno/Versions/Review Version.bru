@@ -1,0 +1,37 @@
+meta {
+  name: Review Version
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/review
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Manually transition a version to IN_REVIEW status.
+  
+  Authorization:
+  - User must have approval roles (admin, architect, or engineer)
+  - Product and viewer roles cannot review
+  
+  State Transitions:
+  - Version must be in SUBMITTED state
+  - Transitions to IN_REVIEW status
+  
+  Use Cases:
+  - Team lead signals "ready for approval" without approving themselves
+  - Trigger notifications to approvers that version is ready
+  - Explicitly start the review phase
+  
+  Note: This endpoint is OPTIONAL
+  - First approval will auto-transition SUBMITTED → IN_REVIEW
+  - Manual review is only needed if you want explicit control over when review starts
+  - Useful for audit trails showing who initiated review vs who approved
+}

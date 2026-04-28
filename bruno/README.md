@@ -25,6 +25,7 @@ bruno/
 │   ├── Get Version.bru
 │   ├── List Versions.bru
 │   ├── Submit Version.bru
+│   ├── Review Version.bru      # ⭐ NEW: Optional manual review
 │   ├── Approve Version.bru
 │   ├── Reject Version.bru
 │   ├── Publish Version.bru
@@ -107,13 +108,19 @@ make run
    - Run `Versions/Submit Version`
    - Moves version from DRAFT → SUBMITTED
 
-4. **Approve Version**
-   - Run `Versions/Approve Version`
-   - Multiple approvals may be required
+4. **Review (Optional)**
+   - Run `Versions/Review Version` to manually transition to IN_REVIEW
+   - OR skip this step - first approval will auto-transition to IN_REVIEW
 
-5. **Publish Version**
+5. **Approve Version**
+   - Run `Versions/Approve Version` (as engineer)
+   - Run `Versions/Approve Version` again (as architect)
+   - Approval role is automatically determined from user's role
+   - Version moves to APPROVED when all required approvals received
+
+6. **Publish Version**
    - Run `Versions/Publish Version`
-   - Makes version live
+   - Makes version live (APPROVED → PUBLISHED)
 
 ### Working with Files
 
@@ -170,10 +177,11 @@ If running on a different port, update `base_url` in collection variables.
 - **Get Version** - Retrieve version details
 - **List Versions** - All versions of a document
 - **Submit Version** - Submit for review (DRAFT → SUBMITTED)
-- **Approve Version** - Approve as stakeholder
-- **Reject Version** - Reject with comments
-- **Publish Version** - Publish approved version
-- **Get Version Status** - Detailed workflow status
+- **Review Version** - ⭐ Optional manual transition to IN_REVIEW state
+- **Approve Version** - Approve version (auto-transitions to IN_REVIEW if needed, role determined by server)
+- **Reject Version** - Reject version (auto-transitions to IN_REVIEW first, then REJECTED)
+- **Publish Version** - Publish approved version (APPROVED → PUBLISHED)
+- **Get Version Status** - Detailed workflow status with approval progress
 
 ### Validation
 
@@ -211,13 +219,25 @@ If running on a different port, update `base_url` in collection variables.
 
 ### Complete Approval Workflow
 
+**Option 1: Auto-Transition (Recommended)**
 1. Create Document → `document_id` saved
 2. Submit Version → DRAFT → SUBMITTED
-3. Add Stakeholder (if needed)
-4. Approve Version → APPROVED (when all approvals received)
-5. Publish Version → PUBLISHED
-6. Create Version (v2.0.0)
-7. Publish v2.0.0 → Auto-deprecates v1.0.0
+3. Approve Version (engineer) → Auto-transitions to IN_REVIEW, creates approval (technical)
+4. Approve Version (architect) → Creates approval (architect), transitions to APPROVED
+5. Publish Version → APPROVED → PUBLISHED
+
+**Option 2: With Manual Review**
+1. Create Document → `document_id` saved
+2. Submit Version → DRAFT → SUBMITTED
+3. Review Version → SUBMITTED → IN_REVIEW (explicit)
+4. Approve Version (engineer) → Creates approval (technical)
+5. Approve Version (architect) → Creates approval (architect), transitions to APPROVED
+6. Publish Version → APPROVED → PUBLISHED
+
+**Versioning Flow**
+1. Create Version (v2.0.0)
+2. Submit, approve, publish v2.0.0
+3. Previous version auto-deprecates
 
 ### Validation Workflow
 
@@ -258,6 +278,51 @@ Currently supports:
 To test, change `document_type` in request body.
 
 ## 📚 API Reference
+
+### ⭐ Important: Approval Role Changes
+
+**The `role` field has been REMOVED from approve/reject requests.**
+
+**Before** (old behavior):
+```json
+POST /versions/{id}/approve
+{
+  "role": "engineer",      // ❌ No longer needed
+  "comment": "LGTM"
+}
+```
+
+**Now** (current behavior):
+```json
+POST /versions/{id}/approve
+{
+  "comment": "LGTM"        // ✅ Only comment needed
+}
+```
+
+**How approval roles work now:**
+
+| User Role | Approves As | Notes |
+|-----------|-------------|-------|
+| admin | technical | First available role |
+| architect | architect | - |
+| engineer | technical | - |
+| product | ❌ Cannot approve | Can only publish |
+| viewer | ❌ Cannot approve | Read-only |
+
+**Pattern document requirements:**
+- 1 technical approval (engineer or admin)
+- 1 architect approval (architect or admin)
+- Same user cannot provide multiple roles
+
+**Auto-Transition Behavior:**
+
+When you approve/reject a version in SUBMITTED state:
+1. Version automatically transitions to IN_REVIEW
+2. Then approval/rejection is processed
+3. No need to call `/review` separately (but you can if you want explicit control)
+
+See full documentation: [docs/API_WORKFLOW.md](../docs/API_WORKFLOW.md)
 
 See [README.md](../README.md#api-documentation) for complete API documentation.
 

@@ -17,14 +17,22 @@ headers {
 
 body:json {
   {
-    "comment": "Needs more detail in the authentication section",
-    "role": "architect"
+    "reason": "Needs more detail in the authentication section"
   }
 }
 
 docs {
   Reject a version.
   
-  Version moves to REJECTED status.
-  Can be resubmitted after fixes.
+  Authorization:
+  - User must have approval roles (admin, architect, or engineer)
+  - Product and viewer roles cannot reject
+  
+  State Transitions:
+  - If version is SUBMITTED: auto-transitions to IN_REVIEW, then to REJECTED
+  - If version is IN_REVIEW: transitions to REJECTED
+  - Cannot reject from other states (DRAFT, APPROVED, PUBLISHED, etc.)
+  
+  Version moves to REJECTED status (terminal state).
+  A new version must be created to resubmit content.
 }

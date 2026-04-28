@@ -24,7 +24,17 @@ body:json {
 docs {
   Submit a version for review.
   
-  Workflow: DRAFT → SUBMITTED
+  State Transition: DRAFT → SUBMITTED
   
-  After submission, stakeholders can approve/reject.
+  After submission:
+  1. Version is ready for approval
+  2. Approvers can call /approve (auto-transitions to IN_REVIEW)
+  3. OR team lead can call /review to manually transition to IN_REVIEW first
+  4. Once all required approvals collected, version moves to APPROVED
+  5. Product role can then publish (APPROVED → PUBLISHED)
+  
+  Workflow for pattern documents:
+  DRAFT → SUBMITTED → IN_REVIEW → APPROVED → PUBLISHED
+                          ↓
+                      REJECTED
 }
