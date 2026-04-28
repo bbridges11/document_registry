@@ -30,7 +30,7 @@ const (
 )
 
 type Config struct {
-	App      AppConfig `env:"APP"`
+	App      AppConfig `envPrefix:"APP"`
 	Logging  LoggingConfig
 	Server   ServerConfig
 	Database DatabaseConfig
@@ -66,7 +66,7 @@ type GRPCConfig struct {
 
 type DatabaseConfig struct {
 	Driver   DatabaseDriver `env:"DB_DRIVER" envDefault:"postgres"`
-	Postgres PostgresConfig `env:"POSTGRE"`
+	Postgres PostgresConfig `envPrefix:"POSTGRES_"`
 }
 
 type PostgresConfig struct {
@@ -110,8 +110,8 @@ func (c PostgresConfig) DSN() string {
 
 type AWSConfig struct {
 	Region string    `env:"AWS_REGION" envDefault:"us-east-1"`
-	S3     S3Config  `env:"S3"`
-	SNS    SNSConfig `env:"SNS"`
+	S3     S3Config  `envPrefix:"S3_"`
+	SNS    SNSConfig `envPrefix:"SNS_"`
 }
 
 type S3Config struct {

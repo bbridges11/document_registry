@@ -25,12 +25,12 @@ services:
     environment:
       SERVICES: s3,sns
       DEBUG: 1
-      DATA_DIR: /tmp/localstack/data
+      PERSISTENCE: 1
       DOCKER_HOST: unix:///var/run/docker.sock
     ports:
       - "4566:4566"
     volumes:
-      - localstack-data:/tmp/localstack
+      - localstack-data:/var/lib/localstack
       - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:

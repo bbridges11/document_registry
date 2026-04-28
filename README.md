@@ -175,7 +175,7 @@ See [ENV_MIGRATION.md](ENV_MIGRATION.md) for migration guide from old variable n
 make dev-full
 ```
 
-This runs: docker-up → db-migrate → s3-create-bucket → run
+This runs: docker-up → db-migrate → s3-create-bucket → sns-create-topic
 
 ### Step-by-Step
 
@@ -189,7 +189,10 @@ make db-migrate
 # 3. Create S3 bucket
 make s3-create-bucket
 
-# 4. Start the application
+# 4. Create SNS topic (optional - only if using notifications)
+make sns-create-topic
+
+# 5. Start the application
 make run
 ```
 
@@ -474,7 +477,11 @@ make db-shell             # Open psql shell
 # AWS/LocalStack
 make s3-create-bucket     # Create S3 bucket
 make s3-list-buckets      # List S3 buckets
+make s3-list-objects      # List objects in bucket
 make sns-create-topic     # Create SNS topic
+make sns-list-topics      # List SNS topics
+make sns-subscribe        # Subscribe email to topic
+make sns-list-subscriptions # List SNS subscriptions
 
 # Health & Monitoring
 make health               # Check all services

@@ -11,7 +11,6 @@ func registerNotificationHandlers(infra *infrastructure, log *zap.Logger) {
 	log.Info("registering notification event handlers")
 
 	// Create notification event handler
-	log.Info("THIS IS WHERE NOTFICATIONS ARE REGISTERED wire_notification.go")
 	notificationHandler := handlers.NewNotificationEventHandler(
 		infra.NotificationService,
 		infra.UserRepo,

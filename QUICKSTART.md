@@ -227,7 +227,7 @@ sleep 10
 make run
 ```
 
-**Pro tip:** Use `make dev-full` to do everything except creating .env
+**Pro tip:** Use `make dev-full` to do everything (docker-up + db-migrate + s3-create-bucket + sns-create-topic)
 
 ---
 
@@ -333,6 +333,8 @@ make docker-up
 | `make db-migrate` | Run database migrations |
 | `make health` | Check all service health |
 | `make s3-create-bucket` | Create S3 bucket in LocalStack |
+| `make sns-create-topic` | Create SNS topic in LocalStack |
+| `make dev-full` | Complete setup (Docker + DB + S3 + SNS) |
 | `make help` | Show all available commands |
 
 ---

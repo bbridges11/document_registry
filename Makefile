@@ -260,6 +260,39 @@ s3-list-objects: ## List objects in document-registry bucket
 	@echo "$(BLUE)Objects in document-registry bucket:$(NC)"
 	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 s3 ls s3://document-registry --recursive
 
+##@ SNS Operations
+
+.PHONY: sns-create-topic
+sns-create-topic: ## Create SNS topic in LocalStack
+	@echo "$(BLUE)Creating SNS topic...$(NC)"
+	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 sns create-topic --name document-registry
+	@echo "$(GREEN)✓ Topic created: arn:aws:sns:us-east-1:000000000000:document-registry$(NC)"
+
+.PHONY: sns-list-topics
+sns-list-topics: ## List SNS topics
+	@echo "$(BLUE)SNS Topics:$(NC)"
+	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 sns list-topics
+
+.PHONY: sns-subscribe
+sns-subscribe: ## Subscribe email to SNS topic (usage: make sns-subscribe EMAIL=test@example.com)
+	@if [ -z "$(EMAIL)" ]; then \
+		echo "$(RED)✗ Error: EMAIL is required$(NC)"; \
+		echo "$(YELLOW)Usage: make sns-subscribe EMAIL=test@example.com$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Subscribing $(EMAIL) to document-registry topic...$(NC)"
+	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 sns subscribe \
+		--topic-arn arn:aws:sns:us-east-1:000000000000:document-registry \
+		--protocol email \
+		--notification-endpoint $(EMAIL)
+	@echo "$(GREEN)✓ Subscription created$(NC)"
+	@echo "$(YELLOW)Note: In LocalStack, email subscriptions are automatically confirmed$(NC)"
+
+.PHONY: sns-list-subscriptions
+sns-list-subscriptions: ## List SNS subscriptions
+	@echo "$(BLUE)SNS Subscriptions:$(NC)"
+	AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test aws --endpoint-url=http://localhost:4566 sns list-subscriptions
+
 ##@ Testing & Validation
 
 .PHONY: health
@@ -300,7 +333,7 @@ dev: docker-up ## Start full development environment (Docker + App)
 	@echo "  make dev-full"
 
 .PHONY: dev-full
-dev-full: docker-up s3-create-bucket ## Full dev setup (Docker + S3)
+dev-full: docker-up db-migrate s3-create-bucket sns-create-topic ## Full dev setup (Docker + Migrations + S3 + SNS)
 	@echo ""
 	@echo "$(GREEN)✓ Development environment ready!$(NC)"
 	@echo ""
