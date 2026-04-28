@@ -10,6 +10,7 @@ import (
 	"github.com/bbridges_11/document-registry/internal/adapters/inbound/http/stakeholder"
 	validationhttp "github.com/bbridges_11/document-registry/internal/adapters/inbound/http/validation"
 	"github.com/bbridges_11/document-registry/internal/adapters/inbound/http/version"
+	"github.com/bbridges_11/document-registry/internal/adapters/outbound/persistence/postgres"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/validation"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/validation/inprocess"
 	"github.com/bbridges_11/document-registry/internal/domain/workflow"
@@ -65,6 +66,9 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 	)
 	documentService := appDocument.NewService(documentCommandService, documentQueryService)
 
+	// Create UserRoleResolver for version approvals
+	userRoleResolver := postgres.NewUserRoleResolverAdapter(infra.UserRepo)
+
 	versionCommandService := appVersion.NewCommandService(
 		infra.VersionRepo,
 		infra.DocumentRepo,
@@ -75,6 +79,7 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 		infra.PublisherService,
 		infra.Runner,
 		infra.UserRepo,
+		userRoleResolver,
 		infra.EventBus,
 		workflowFactory,
 		policyFactory,

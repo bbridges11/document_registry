@@ -189,7 +189,7 @@ func (h *Handler) ApproveVersion(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid request"})
 	}
-	if err := h.versions.Approve(c.Request().Context(), appver.ApproveInput{Actor: a, ID: id, Role: req.Role, Comment: req.Comment}); err != nil {
+	if err := h.versions.Approve(c.Request().Context(), appver.ApproveInput{Actor: a, ID: id, Comment: req.Comment}); err != nil {
 		return handleError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)

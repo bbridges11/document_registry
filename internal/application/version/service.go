@@ -2,8 +2,6 @@ package version
 
 import (
 	"context"
-
-	domainApproval "github.com/bbridges_11/document-registry/internal/domain/approval"
 )
 
 type Service struct {
@@ -76,7 +74,7 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) error {
 	return s.commands.ReviewVersion(ctx, ReviewVersionCommand{ID: input.ID, ReviewedBy: input.Actor.UserID})
 }
 func (s *Service) Approve(ctx context.Context, input ApproveInput) error {
-	return s.commands.ApproveVersion(ctx, ApproveVersionCommand{ID: input.ID, ApprovedBy: input.Actor.UserID, Role: domainApproval.ApprovalRole(input.Role), Comment: input.Comment})
+	return s.commands.ApproveVersion(ctx, ApproveVersionCommand{ID: input.ID, ApprovedBy: input.Actor.UserID, Comment: input.Comment})
 }
 func (s *Service) Reject(ctx context.Context, input RejectInput) error {
 	return s.commands.RejectVersion(ctx, RejectVersionCommand{ID: input.ID, RejectedBy: input.Actor.UserID, Reason: input.Reason})

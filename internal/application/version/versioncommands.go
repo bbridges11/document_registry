@@ -31,6 +31,7 @@ type CommandService struct {
 	publisherService outbound.PublisherService
 	txManager        outbound.TransactionManager
 	userRepo         outbound.UserRepository
+	userRoleResolver outbound.UserRoleResolver
 	eventBus         outbound.EventBus
 	workflowFactory  *workflow.Factory
 	policyFactory    *approval.PolicyFactory
@@ -47,6 +48,7 @@ func NewCommandService(
 	publisherService outbound.PublisherService,
 	txManager outbound.TransactionManager,
 	userRepo outbound.UserRepository,
+	userRoleResolver outbound.UserRoleResolver,
 	eventBus outbound.EventBus,
 	workflowFactory *workflow.Factory,
 	policyFactory *approval.PolicyFactory,
@@ -62,6 +64,7 @@ func NewCommandService(
 		publisherService: publisherService,
 		txManager:        txManager,
 		userRepo:         userRepo,
+		userRoleResolver: userRoleResolver,
 		eventBus:         eventBus,
 		workflowFactory:  workflowFactory,
 		policyFactory:    policyFactory,
@@ -190,6 +193,15 @@ func (s *CommandService) ReviewVersion(ctx context.Context, cmd ReviewVersionCom
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
 	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
 
+	// Verify user has approval roles (only users who can approve can also review)
+	userID := try.To1(uuid.Parse(cmd.ReviewedBy))
+	availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID))
+
+	// Validate user has at least one approval role
+	if len(availableRoles) == 0 {
+		return errors.New(errors.CodeForbidden, "user has no approval roles and cannot review versions")
+	}
+
 	try.To(ver.Review(cmd.ReviewedBy, wf))
 	try.To(s.versionRepo.Save(ctx, ver))
 
@@ -209,44 +221,27 @@ func (s *CommandService) ApproveVersion(ctx context.Context, cmd ApproveVersionC
 		doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
 		policy := try.To1(s.policyFactory.GetPolicy(doc.DocumentType().ApprovalPolicy()))
 
-		// Get user to determine approval roles
-		// Parse user ID as UUID
+		// Parse user ID and get approval roles from resolver
 		userID := try.To1(uuid.Parse(cmd.ApprovedBy))
-		user := try.To1(s.userRepo.GetByID(ctx, userID))
+		availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID))
 
-		// Map user role to approval roles
-		// Admin users can perform all approval roles
-		// Contributors can perform technical approvals
-		// Viewers cannot approve
-		var userRoles []approval.ApprovalRole
-		switch user.Role() {
-		case "admin":
-			userRoles = []approval.ApprovalRole{
-				approval.ApprovalRoleTechnical,
-				approval.ApprovalRoleArchitect,
-				approval.ApprovalRoleAdmin,
-			}
-		case "architect":
-			userRoles = []approval.ApprovalRole{
-				approval.ApprovalRoleArchitect,
-			}
-		case "engineer":
-			userRoles = []approval.ApprovalRole{
-				approval.ApprovalRoleTechnical,
-			}
-		default:
-			// Product, viewers have no approval roles
-			userRoles = []approval.ApprovalRole{}
+		// Validate user has at least one approval role
+		if len(availableRoles) == 0 {
+			return errors.New(errors.CodeForbidden, "user has no approval roles")
 		}
+
+		// Determine which role to use - use first available role
+		// For users with multiple roles (e.g., admin), this will use technical (first in list)
+		roleToUse := availableRoles[0]
 
 		// Get existing approvals
 		existingApprovals := try.To1(s.approvalRepo.ListByVersionID(ctx, ver.ID()))
 
-		// Create approval
-		newApproval := try.To1(approval.NewApproval(ver.ID(), cmd.ApprovedBy, cmd.Role, true, cmd.Comment))
+		// Create approval with server-determined role
+		newApproval := try.To1(approval.NewApproval(ver.ID(), cmd.ApprovedBy, roleToUse, true, cmd.Comment))
 
 		// Validate approval against policy
-		try.To(policy.ValidateApproval(newApproval, ver.CreatedBy(), userRoles, existingApprovals))
+		try.To(policy.ValidateApproval(newApproval, ver.CreatedBy(), availableRoles, existingApprovals))
 
 		// Save approval
 		try.To(s.approvalRepo.Save(ctx, newApproval))
@@ -257,7 +252,7 @@ func (s *CommandService) ApproveVersion(ctx context.Context, cmd ApproveVersionC
 			ver.DocumentID().String(),
 			ver.Version().String(),
 			cmd.ApprovedBy,
-			cmd.Role.String(),
+			roleToUse.String(),
 		)
 		s.eventBus.Publish(ctx, events.NewEnvelope(approvedEvent, ""))
 
@@ -266,7 +261,7 @@ func (s *CommandService) ApproveVersion(ctx context.Context, cmd ApproveVersionC
 		if policy.IsSatisfied(allApprovals) {
 			// Transition version to APPROVED
 			wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
-			try.To(ver.Approve(cmd.ApprovedBy, cmd.Role.String(), wf))
+			try.To(ver.Approve(cmd.ApprovedBy, roleToUse.String(), wf))
 			try.To(s.versionRepo.Save(ctx, ver))
 
 			// Publish events after successful persistence
@@ -293,6 +288,15 @@ func (s *CommandService) RejectVersion(ctx context.Context, cmd RejectVersionCom
 	// Get document to determine workflow
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
 	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
+
+	// Verify user has approval roles (only users who can approve can also reject)
+	userID := try.To1(uuid.Parse(cmd.RejectedBy))
+	availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID))
+
+	// Validate user has at least one approval role
+	if len(availableRoles) == 0 {
+		return errors.New(errors.CodeForbidden, "user has no approval roles and cannot reject versions")
+	}
 
 	try.To(ver.Reject(cmd.RejectedBy, cmd.Reason, wf))
 	try.To(s.versionRepo.Save(ctx, ver))

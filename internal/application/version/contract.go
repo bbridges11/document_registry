@@ -43,7 +43,6 @@ type ReviewInput struct {
 type ApproveInput struct {
 	Actor   Actor
 	ID      uuid.UUID
-	Role    string
 	Comment string
 }
 type RejectInput struct {

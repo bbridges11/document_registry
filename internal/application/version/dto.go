@@ -41,7 +41,6 @@ type ReviewVersionCommand struct {
 type ApproveVersionCommand struct {
 	ID         uuid.UUID
 	ApprovedBy string
-	Role       approval.ApprovalRole
 	Comment    string
 }
 
