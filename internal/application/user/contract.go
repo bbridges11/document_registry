@@ -16,6 +16,7 @@ type CommandService interface {
 
 type QueryService interface {
 	GetUser(ctx context.Context, query GetUserQuery) (UserDTO, error)
+	GetUserByExternalID(ctx context.Context, query GetUserByExternalIDQuery) (UserDTO, error)
 	GetUserByEmail(ctx context.Context, query GetUserByEmailQuery) (UserDTO, error)
 	ListUsers(ctx context.Context, query ListUsersQuery) ([]UserDTO, error)
 	UserExists(ctx context.Context, id uuid.UUID) (bool, error)

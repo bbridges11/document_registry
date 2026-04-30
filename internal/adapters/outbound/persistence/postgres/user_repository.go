@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/bbridges_11/document-registry/internal/domain/user"
@@ -27,8 +28,8 @@ func (r *UserRepository) Save(ctx context.Context, usr *user.User) (err error) {
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		INSERT INTO users (id, email, name, role, active, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO users (id, external_id, email, name, role, active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO UPDATE SET
 			name = EXCLUDED.name,
 			role = EXCLUDED.role,
@@ -38,6 +39,7 @@ func (r *UserRepository) Save(ctx context.Context, usr *user.User) (err error) {
 
 	try.To1(q.Exec(ctx, query,
 		usr.ID(),
+		usr.ExternalID(),
 		usr.Email(),
 		usr.Name(),
 		string(usr.Role()),
@@ -55,18 +57,18 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (_ *user.Use
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		SELECT id, email, name, role, active, created_at, updated_at
+		SELECT id, external_id, email, name, role, active, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 
 	var userID uuid.UUID
-	var email, name, role string
+	var externalID, email, name, role string
 	var active bool
 	var createdAt, updatedAt time.Time
 
 	err = q.QueryRow(ctx, query, id).Scan(
-		&userID, &email, &name, &role, &active, &createdAt, &updatedAt,
+		&userID, &externalID, &email, &name, &role, &active, &createdAt, &updatedAt,
 	)
 
 	if err == pgx.ErrNoRows {
@@ -76,6 +78,44 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (_ *user.Use
 
 	return user.RehydrateUser(
 		userID,
+		externalID,
+		email,
+		name,
+		user.UserRole(role),
+		active,
+		createdAt,
+		updatedAt,
+	), nil
+}
+
+func (r *UserRepository) GetByExternalID(ctx context.Context, externalID string) (_ *user.User, err error) {
+	defer err2.Handle(&err)
+
+	q := r.runner.GetQuerier(ctx)
+
+	query := `
+		SELECT id, external_id, email, name, role, active, created_at, updated_at
+		FROM users
+		WHERE external_id = $1
+	`
+
+	var userID uuid.UUID
+	var extID, email, name, role string
+	var active bool
+	var createdAt, updatedAt time.Time
+
+	err = q.QueryRow(ctx, query, strings.ToLower(externalID)).Scan(
+		&userID, &extID, &email, &name, &role, &active, &createdAt, &updatedAt,
+	)
+
+	if err == pgx.ErrNoRows {
+		return nil, errors.ErrNotFound
+	}
+	try.To(err)
+
+	return user.RehydrateUser(
+		userID,
+		extID,
 		email,
 		name,
 		user.UserRole(role),
@@ -91,18 +131,18 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (_ *user.
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		SELECT id, email, name, role, active, created_at, updated_at
+		SELECT id, external_id, email, name, role, active, created_at, updated_at
 		FROM users
 		WHERE email = $1
 	`
 
 	var userID uuid.UUID
-	var userEmail, name, role string
+	var externalID, userEmail, name, role string
 	var active bool
 	var createdAt, updatedAt time.Time
 
 	err = q.QueryRow(ctx, query, email).Scan(
-		&userID, &userEmail, &name, &role, &active, &createdAt, &updatedAt,
+		&userID, &externalID, &userEmail, &name, &role, &active, &createdAt, &updatedAt,
 	)
 
 	if err == pgx.ErrNoRows {
@@ -112,6 +152,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (_ *user.
 
 	return user.RehydrateUser(
 		userID,
+		externalID,
 		userEmail,
 		name,
 		user.UserRole(role),
@@ -127,7 +168,7 @@ func (r *UserRepository) ListAll(ctx context.Context) (users []*user.User, err e
 	q := r.runner.GetQuerier(ctx)
 
 	query := `
-		SELECT id, email, name, role, active, created_at, updated_at
+		SELECT id, external_id, email, name, role, active, created_at, updated_at
 		FROM users
 		ORDER BY created_at DESC
 	`
@@ -139,14 +180,15 @@ func (r *UserRepository) ListAll(ctx context.Context) (users []*user.User, err e
 
 	for rows.Next() {
 		var userID uuid.UUID
-		var email, name, role string
+		var externalID, email, name, role string
 		var active bool
 		var createdAt, updatedAt time.Time
 
-		try.To(rows.Scan(&userID, &email, &name, &role, &active, &createdAt, &updatedAt))
+		try.To(rows.Scan(&userID, &externalID, &email, &name, &role, &active, &createdAt, &updatedAt))
 
 		users = append(users, user.RehydrateUser(
 			userID,
+			externalID,
 			email,
 			name,
 			user.UserRole(role),
@@ -167,6 +209,18 @@ func (r *UserRepository) Exists(ctx context.Context, id uuid.UUID) (exists bool,
 	query := `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1 AND active = true)`
 
 	try.To(q.QueryRow(ctx, query, id).Scan(&exists))
+
+	return exists, nil
+}
+
+func (r *UserRepository) ExistsByExternalID(ctx context.Context, externalID string) (exists bool, err error) {
+	defer err2.Handle(&err)
+
+	q := r.runner.GetQuerier(ctx)
+
+	query := `SELECT EXISTS(SELECT 1 FROM users WHERE external_id = $1)`
+
+	try.To(q.QueryRow(ctx, query, strings.ToLower(externalID)).Scan(&exists))
 
 	return exists, nil
 }

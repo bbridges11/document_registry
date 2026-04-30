@@ -1,0 +1,31 @@
+meta {
+  name: Get Publication
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/publications/{{publication_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get a single publication by ID.
+  
+  **Admin Only**: This endpoint requires admin privileges.
+  
+  Returns:
+  - Publication ID
+  - Version ID
+  - Document ID
+  - Destination (published_to)
+  - Publisher (user ID)
+  - Published timestamp
+  - Status (success/failed)
+  - Error message (if failed)
+}

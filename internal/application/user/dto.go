@@ -9,9 +9,10 @@ import (
 
 // CreateUserCommand represents the command to create a new user
 type CreateUserCommand struct {
-	Email string
-	Name  string
-	Role  string
+	ExternalID string
+	Email      string
+	Name       string
+	Role       string
 }
 
 // UpdateUserCommand represents the command to update a user
@@ -26,6 +27,11 @@ type GetUserQuery struct {
 	ID uuid.UUID
 }
 
+// GetUserByExternalIDQuery represents a query to get a user by external ID
+type GetUserByExternalIDQuery struct {
+	ExternalID string
+}
+
 // GetUserByEmailQuery represents a query to get a user by email
 type GetUserByEmailQuery struct {
 	Email string
@@ -38,25 +44,27 @@ type ListUsersQuery struct {
 
 // UserDTO represents user data transfer object
 type UserDTO struct {
-	ID        uuid.UUID `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	Role      string    `json:"role"`
-	Active    bool      `json:"active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         uuid.UUID `json:"id"`
+	ExternalID string    `json:"external_id"`
+	Email      string    `json:"email"`
+	Name       string    `json:"name"`
+	Role       string    `json:"role"`
+	Active     bool      `json:"active"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // ToDTO converts domain user to DTO
 func ToDTO(u *user.User) UserDTO {
 	return UserDTO{
-		ID:        u.ID(),
-		Email:     u.Email(),
-		Name:      u.Name(),
-		Role:      string(u.Role()),
-		Active:    u.Active(),
-		CreatedAt: u.CreatedAt(),
-		UpdatedAt: u.UpdatedAt(),
+		ID:         u.ID(),
+		ExternalID: u.ExternalID(),
+		Email:      u.Email(),
+		Name:       u.Name(),
+		Role:       string(u.Role()),
+		Active:     u.Active(),
+		CreatedAt:  u.CreatedAt(),
+		UpdatedAt:  u.UpdatedAt(),
 	}
 }
 

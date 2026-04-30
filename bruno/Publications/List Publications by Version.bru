@@ -1,0 +1,32 @@
+meta {
+  name: List Publications by Version
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/versions/{{version_id}}/publications
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  List all publications for a specific version.
+  
+  **Admin Only**: This endpoint requires admin privileges.
+  
+  Returns array of publications showing:
+  - All destinations this version was published to
+  - Publication timestamps
+  - Success/failure status
+  - Error messages (if any failed)
+  
+  Use Case:
+  - Audit where a specific version was published
+  - Verify successful publication to all destinations
+  - Troubleshoot publication failures
+}

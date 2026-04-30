@@ -137,6 +137,66 @@ func (r *PublicationRepository) ListByVersionID(ctx context.Context, versionID u
 	return publications, nil
 }
 
+// ListAll retrieves all publications with pagination
+func (r *PublicationRepository) ListAll(ctx context.Context, limit int, offset int) (pubs []*publication.Publication, err error) {
+	defer err2.Handle(&err)
+
+	query := `
+		SELECT id, version_id, document_id, published_to, published_by, published_at, status, error_message
+		FROM publications
+		ORDER BY published_at DESC
+		LIMIT $1 OFFSET $2
+	`
+
+	querier := r.runner.GetQuerier(ctx)
+	rows := try.To1(querier.Query(ctx, query, limit, offset))
+	defer rows.Close()
+
+	publications := []*publication.Publication{}
+	for rows.Next() {
+		var (
+			pubID        uuid.UUID
+			versionID    uuid.UUID
+			documentID   uuid.UUID
+			publishedTo  string
+			publishedBy  string
+			publishedAt  time.Time
+			status       string
+			errorMessage string
+		)
+
+		try.To(rows.Scan(&pubID, &versionID, &documentID, &publishedTo, &publishedBy, &publishedAt, &status, &errorMessage))
+
+		pub := publication.RehydratePublication(
+			pubID,
+			versionID,
+			documentID,
+			publishedTo,
+			publishedBy,
+			publishedAt,
+			publication.PublicationStatus(status),
+			errorMessage,
+		)
+		publications = append(publications, pub)
+	}
+
+	try.To(rows.Err())
+	return publications, nil
+}
+
+// Count returns the total number of publications
+func (r *PublicationRepository) Count(ctx context.Context) (count int, err error) {
+	defer err2.Handle(&err)
+
+	query := `SELECT COUNT(*) FROM publications`
+
+	querier := r.runner.GetQuerier(ctx)
+	row := querier.QueryRow(ctx, query)
+
+	try.To(row.Scan(&count))
+	return count, nil
+}
+
 // ListByDocumentID retrieves all publications for a document
 func (r *PublicationRepository) ListByDocumentID(ctx context.Context, documentID uuid.UUID) (pubs []*publication.Publication, err error) {
 	defer err2.Handle(&err)

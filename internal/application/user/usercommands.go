@@ -34,39 +34,44 @@ func NewUserCommandService(
 func (s *UserCommandService) CreateUser(ctx context.Context, cmd CreateUserCommand) (dto UserDTO, err error) {
 	defer err2.Handle(&err)
 
-	// Check if user already exists
-	var existing *user.User
-	existing, err = s.repo.GetByEmail(ctx, cmd.Email)
-	if errors.IsCode(err, errors.CodeNotFound) {
-
-		if existing != nil {
-			return UserDTO{}, errors.New(errors.CodeConflict, "user with this email already exists")
-		}
-
-		// Parse role
-		role := user.UserRole(cmd.Role)
-		if !role.IsValid() {
-			return UserDTO{}, errors.New(errors.CodeInvalidArgument, "invalid user role")
-		}
-
-		// Create domain aggregate
-		usr := try.To1(user.NewUser(cmd.Email, cmd.Name, role))
-
-		// Persist
-		try.To(s.repo.Save(ctx, usr))
-
-		// Publish events
-		s.publishEvents(ctx, usr, "")
-
-		s.logger.Info("user created",
-			zap.String("user_id", usr.ID().String()),
-			zap.String("email", usr.Email()),
-		)
-
-		return ToDTO(usr), nil
+	// Check if external ID already exists
+	extIDExists := try.To1(s.repo.ExistsByExternalID(ctx, cmd.ExternalID))
+	if extIDExists {
+		return UserDTO{}, errors.New(errors.CodeConflict, "user with this external ID already exists")
 	}
 
-	return UserDTO{}, err
+	// Check if email already exists
+	var existing *user.User
+	existing, err = s.repo.GetByEmail(ctx, cmd.Email)
+	if err == nil && existing != nil {
+		return UserDTO{}, errors.New(errors.CodeConflict, "user with this email already exists")
+	}
+	if !errors.IsCode(err, errors.CodeNotFound) && err != nil {
+		return UserDTO{}, err
+	}
+
+	// Parse role
+	role := user.UserRole(cmd.Role)
+	if !role.IsValid() {
+		return UserDTO{}, errors.New(errors.CodeInvalidArgument, "invalid user role")
+	}
+
+	// Create domain aggregate
+	usr := try.To1(user.NewUser(cmd.ExternalID, cmd.Email, cmd.Name, role))
+
+	// Persist
+	try.To(s.repo.Save(ctx, usr))
+
+	// Publish events
+	s.publishEvents(ctx, usr, "")
+
+	s.logger.Info("user created",
+		zap.String("user_id", usr.ID().String()),
+		zap.String("external_id", usr.ExternalID()),
+		zap.String("email", usr.Email()),
+	)
+
+	return ToDTO(usr), nil
 }
 
 func (s *UserCommandService) UpdateUser(ctx context.Context, cmd UpdateUserCommand) (dto UserDTO, err error) {

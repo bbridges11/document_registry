@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/bbridges_11/document-registry/internal/application/user"
-	"github.com/google/uuid"
+	domainUser "github.com/bbridges_11/document-registry/internal/domain/user"
 	"github.com/labstack/echo/v4"
 )
 
@@ -23,30 +23,28 @@ func NewUserValidationMiddleware(userQueries user.QueryService) *UserValidationM
 func (m *UserValidationMiddleware) ValidateUserExists() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			userIDStr := c.Request().Header.Get("X-User-ID")
-			if userIDStr == "" {
+			externalID := c.Request().Header.Get("X-User-ID")
+			if externalID == "" {
 				return c.JSON(http.StatusUnauthorized, map[string]string{
 					"error": "X-User-ID header is required",
 				})
 			}
 
-			// Parse user ID as UUID
-			userID, err := uuid.Parse(userIDStr)
-			if err != nil {
+			// Validate external ID format
+			if err := domainUser.ValidateExternalID(externalID); err != nil {
 				return c.JSON(http.StatusBadRequest, map[string]string{
-					"error": "invalid user ID format",
+					"error": "invalid external ID format",
 				})
 			}
 
-			// Check if user exists and is active
-			exists, err := m.userQueries.UserExists(c.Request().Context(), userID)
+			// Normalize external ID
+			normalizedID := domainUser.NormalizeExternalID(externalID)
+
+			// Check if user exists by external ID
+			_, err := m.userQueries.GetUserByExternalID(c.Request().Context(), user.GetUserByExternalIDQuery{
+				ExternalID: normalizedID,
+			})
 			if err != nil {
-				return c.JSON(http.StatusInternalServerError, map[string]string{
-					"error": "failed to validate user",
-				})
-			}
-
-			if !exists {
 				return c.JSON(http.StatusNotFound, map[string]string{
 					"error": "user not found or inactive",
 				})

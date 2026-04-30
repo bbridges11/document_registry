@@ -68,9 +68,10 @@ func (h *Handler) CreateUser(c echo.Context) error {
 	}
 
 	cmd := appUser.CreateUserCommand{
-		Email: req.Email,
-		Name:  req.Name,
-		Role:  req.Role,
+		ExternalID: req.ExternalID,
+		Email:      req.Email,
+		Name:       req.Name,
+		Role:       req.Role,
 	}
 
 	dto, err := h.commands.CreateUser(c.Request().Context(), cmd)

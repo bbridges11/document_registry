@@ -1,0 +1,45 @@
+meta {
+  name: List Subscriptions
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/subscriptions
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  List all current SNS email subscriptions.
+  
+  **Admin Only**: This endpoint requires admin privileges.
+  
+  Returns array of subscriptions showing:
+  - Email address
+  - Status: "PendingConfirmation" or "Confirmed"
+  
+  Response:
+  [
+    {
+      "email": "user@example.com",
+      "status": "Confirmed"
+    },
+    {
+      "email": "admin@example.com",
+      "status": "PendingConfirmation"
+    }
+  ]
+  
+  Use Cases:
+  - Audit who is subscribed to notifications
+  - Check which subscriptions are pending confirmation
+  - Verify subscription status before troubleshooting
+  
+  Note: This queries SNS directly (real-time data).
+  "PendingConfirmation" means user hasn't clicked email link yet.
+}

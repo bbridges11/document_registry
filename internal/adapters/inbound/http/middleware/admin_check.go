@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/bbridges_11/document-registry/internal/application/user"
-	"github.com/google/uuid"
+	domainUser "github.com/bbridges_11/document-registry/internal/domain/user"
 	"github.com/labstack/echo/v4"
 )
 
@@ -25,24 +25,25 @@ func NewAdminCheckMiddleware(userQueries user.QueryService) *AdminCheckMiddlewar
 func (m *AdminCheckMiddleware) RequireAdmin() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			userIDStr := c.Request().Header.Get("X-User-ID")
-			if userIDStr == "" {
+			externalID := c.Request().Header.Get("X-User-ID")
+			if externalID == "" {
 				return c.JSON(http.StatusUnauthorized, map[string]string{
 					"error": "X-User-ID header is required",
 				})
 			}
 
-			// Parse user ID
-			userID, err := uuid.Parse(userIDStr)
-			if err != nil {
+			// Validate and normalize external ID
+			if err := domainUser.ValidateExternalID(externalID); err != nil {
 				return c.JSON(http.StatusBadRequest, map[string]string{
-					"error": "invalid user ID format",
+					"error": "invalid external ID format",
 				})
 			}
 
-			// Get user details
-			userDTO, err := m.userQueries.GetUser(c.Request().Context(), user.GetUserQuery{
-				ID: userID,
+			normalizedID := domainUser.NormalizeExternalID(externalID)
+
+			// Get user details by external ID
+			userDTO, err := m.userQueries.GetUserByExternalID(c.Request().Context(), user.GetUserByExternalIDQuery{
+				ExternalID: normalizedID,
 			})
 			if err != nil {
 				return c.JSON(http.StatusInternalServerError, map[string]string{

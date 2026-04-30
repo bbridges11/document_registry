@@ -32,6 +32,13 @@ func (s *UserQueryService) GetUser(ctx context.Context, query GetUserQuery) (dto
 	return ToDTO(usr), nil
 }
 
+func (s *UserQueryService) GetUserByExternalID(ctx context.Context, query GetUserByExternalIDQuery) (dto UserDTO, err error) {
+	defer err2.Handle(&err)
+
+	usr := try.To1(s.repo.GetByExternalID(ctx, query.ExternalID))
+	return ToDTO(usr), nil
+}
+
 func (s *UserQueryService) GetUserByEmail(ctx context.Context, query GetUserByEmailQuery) (dto UserDTO, err error) {
 	defer err2.Handle(&err)
 

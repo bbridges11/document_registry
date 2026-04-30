@@ -40,5 +40,12 @@ func wireHTTP(cfg *config.Config, log *zap.Logger, _ *infrastructure, handlers *
 	handlers.User.RegisterRoutes(e, &userhttp.MiddlewareConfig{UserValidation: userValidationMW, AdminOnly: adminOnlyMW})
 	handlers.Validation.RegisterRoutes(e, &validation.MiddlewareConfig{UserValidation: userValidationMW})
 
+	// Publication routes - admin only
+	adminGroup := e.Group("", userValidationMW, adminOnlyMW)
+	handlers.Publication.RegisterRoutes(adminGroup)
+
+	// Subscription routes - admin only
+	handlers.Subscription.RegisterRoutes(adminGroup)
+
 	return httpServer
 }

@@ -1,0 +1,37 @@
+meta {
+  name: Unsubscribe User
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/subscriptions/unsubscribe/{{created_user_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Unsubscribe a user's email from SNS notification topic.
+  
+  **Admin Only**: This endpoint requires admin privileges.
+  
+  Flow:
+  1. Looks up user by ID and gets their email
+  2. Finds subscription in SNS by email
+  3. Calls SNS Unsubscribe to remove subscription
+  4. Returns success
+  
+  Response: Success message
+  
+  Errors:
+  - 400: Invalid user ID or user has no email
+  - 404: User not found or not subscribed
+  - 403: Not admin
+  
+  Note: This immediately removes the subscription.
+  User will no longer receive notifications.
+}

@@ -20,4 +20,10 @@ type PublicationRepository interface {
 
 	// ListByDocumentID retrieves all publications for a document
 	ListByDocumentID(ctx context.Context, documentID uuid.UUID) ([]*publication.Publication, error)
+
+	// ListAll retrieves all publications with pagination
+	ListAll(ctx context.Context, limit int, offset int) ([]*publication.Publication, error)
+
+	// Count returns the total number of publications
+	Count(ctx context.Context) (int, error)
 }

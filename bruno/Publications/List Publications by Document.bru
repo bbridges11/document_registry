@@ -1,0 +1,32 @@
+meta {
+  name: List Publications by Document
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/documents/{{document_id}}/publications
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  List all publications for a specific document (across all versions).
+  
+  **Admin Only**: This endpoint requires admin privileges.
+  
+  Returns array of publications showing:
+  - All versions of this document that were published
+  - Destinations each version was published to
+  - Publication timeline
+  - Success/failure status
+  
+  Use Case:
+  - View complete publication history for a document
+  - Audit which versions are live in which environments
+  - Track publication patterns over time
+}

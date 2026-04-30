@@ -28,8 +28,10 @@ type UserService interface {
 type UserRepository interface {
 	Save(ctx context.Context, user *user.User) error
 	GetByID(ctx context.Context, id uuid.UUID) (*user.User, error)
+	GetByExternalID(ctx context.Context, externalID string) (*user.User, error)
 	GetByEmail(ctx context.Context, email string) (*user.User, error)
 	ListAll(ctx context.Context) ([]*user.User, error)
 	Exists(ctx context.Context, id uuid.UUID) (bool, error)
+	ExistsByExternalID(ctx context.Context, externalID string) (bool, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 }

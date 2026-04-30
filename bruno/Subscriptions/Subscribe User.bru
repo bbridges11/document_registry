@@ -1,0 +1,39 @@
+meta {
+  name: Subscribe User
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/subscriptions/subscribe/{{created_user_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Subscribe a user's email to SNS notification topic.
+  
+  **Admin Only**: This endpoint requires admin privileges.
+  
+  Flow:
+  1. Looks up user by ID and gets their email
+  2. Checks if email already subscribed to SNS topic
+  3. If already subscribed, returns success (idempotent)
+  4. If not subscribed, subscribes email to SNS topic
+  5. AWS SNS sends confirmation email to the user
+  6. User must click confirmation link to activate subscription
+  
+  Response: Success message
+  
+  Errors:
+  - 400: Invalid user ID or user has no email
+  - 404: User not found
+  - 403: Not admin
+  
+  Note: User will receive a confirmation email from AWS SNS.
+  They must click the link to complete subscription.
+}

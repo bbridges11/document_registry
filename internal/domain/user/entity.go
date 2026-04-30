@@ -1,6 +1,8 @@
 package user
 
 import (
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/bbridges_11/document-registry/internal/domain/shared"
@@ -22,20 +24,56 @@ func (r UserRole) IsValid() bool {
 	return r == UserRoleAdmin || r == UserRoleContributor || r == UserRoleViewer
 }
 
+// externalIDPattern validates external ID format (7 alphanumeric characters)
+var externalIDPattern = regexp.MustCompile(`^[a-z0-9]{7}$`)
+
+// ValidateExternalID validates external ID format
+func ValidateExternalID(externalID string) error {
+	if externalID == "" {
+		return errors.New(errors.CodeInvalidArgument, "external ID is required")
+	}
+
+	// Normalize to lowercase
+	normalized := strings.ToLower(externalID)
+
+	// Check length
+	if len(normalized) != 7 {
+		return errors.New(errors.CodeInvalidArgument, "external ID must be exactly 7 characters")
+	}
+
+	// Check format (alphanumeric only)
+	if !externalIDPattern.MatchString(normalized) {
+		return errors.New(errors.CodeInvalidArgument, "external ID must contain only alphanumeric characters")
+	}
+
+	return nil
+}
+
+// NormalizeExternalID normalizes external ID to lowercase
+func NormalizeExternalID(externalID string) string {
+	return strings.ToLower(externalID)
+}
+
 // User is the aggregate root for user management
 type User struct {
 	shared.AggregateRoot
-	id        uuid.UUID
-	email     string
-	name      string
-	role      UserRole
-	active    bool
-	createdAt time.Time
-	updatedAt time.Time
+	id         uuid.UUID
+	externalID string // Client-provided unique identifier (e.g., "a123456")
+	email      string
+	name       string
+	role       UserRole
+	active     bool
+	createdAt  time.Time
+	updatedAt  time.Time
 }
 
 // NewUser creates a new user aggregate
-func NewUser(email, name string, role UserRole) (*User, error) {
+func NewUser(externalID, email, name string, role UserRole) (*User, error) {
+	// Validate external ID
+	if err := ValidateExternalID(externalID); err != nil {
+		return nil, err
+	}
+
 	if email == "" {
 		return nil, errors.New(errors.CodeInvalidArgument, "email is required")
 	}
@@ -46,14 +84,18 @@ func NewUser(email, name string, role UserRole) (*User, error) {
 		return nil, errors.New(errors.CodeInvalidArgument, "invalid user role")
 	}
 
+	// Normalize external ID
+	normalizedExternalID := NormalizeExternalID(externalID)
+
 	user := &User{
-		id:        uuid.New(),
-		email:     email,
-		name:      name,
-		role:      role,
-		active:    true,
-		createdAt: time.Now().UTC(),
-		updatedAt: time.Now().UTC(),
+		id:         uuid.New(),
+		externalID: normalizedExternalID,
+		email:      email,
+		name:       name,
+		role:       role,
+		active:     true,
+		createdAt:  time.Now().UTC(),
+		updatedAt:  time.Now().UTC(),
 	}
 
 	// Record domain event
@@ -68,15 +110,16 @@ func NewUser(email, name string, role UserRole) (*User, error) {
 }
 
 // RehydrateUser recreates a user from persistence
-func RehydrateUser(id uuid.UUID, email, name string, role UserRole, active bool, createdAt, updatedAt time.Time) *User {
+func RehydrateUser(id uuid.UUID, externalID, email, name string, role UserRole, active bool, createdAt, updatedAt time.Time) *User {
 	return &User{
-		id:        id,
-		email:     email,
-		name:      name,
-		role:      role,
-		active:    active,
-		createdAt: createdAt,
-		updatedAt: updatedAt,
+		id:         id,
+		externalID: externalID,
+		email:      email,
+		name:       name,
+		role:       role,
+		active:     active,
+		createdAt:  createdAt,
+		updatedAt:  updatedAt,
 	}
 }
 
@@ -117,6 +160,7 @@ func (u *User) Activate() {
 
 // Getters
 func (u *User) ID() uuid.UUID        { return u.id }
+func (u *User) ExternalID() string   { return u.externalID }
 func (u *User) Email() string        { return u.email }
 func (u *User) Name() string         { return u.name }
 func (u *User) Role() UserRole       { return u.role }

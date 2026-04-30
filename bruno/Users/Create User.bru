@@ -16,9 +16,10 @@ headers {
 
 body:json {
   {
+    "external_id": "a123456",
     "email": "john.doe@example.com",
     "name": "John Doe",
-    "role": "engineer"
+    "role": "contributor"
   }
 }
 
@@ -26,18 +27,31 @@ script:post-response {
   if (res.status === 201) {
     const data = res.body;
     bru.setVar("created_user_id", data.id);
+    bru.setVar("created_user_external_id", data.external_id);
   }
 }
 
 docs {
-  Create a new user.
+  Create a new user with external ID.
   
-  Roles:
+  **External ID**:
+  - Format: Exactly 7 alphanumeric characters (e.g., "a123456")
+  - Case-insensitive: Stored and compared as lowercase
+  - Unique: Cannot reuse existing external IDs
+  - Required: Must be provided
+  
+  **Roles**:
   - admin
-  - engineer
-  - architect
-  - product_manager
+  - contributor
   - viewer
   
-  Auto-saves created_user_id for use in other requests.
+  **Response**:
+  - id: Internal UUID (for system use only)
+  - external_id: Client-provided ID (use in X-User-ID header)
+  
+  **Auto-saved variables**:
+  - created_user_id: Internal UUID
+  - created_user_external_id: External ID for API requests
+  
+  **Use external_id in X-User-ID header for all subsequent requests.**
 }

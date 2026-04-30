@@ -7,13 +7,14 @@ import (
 // ToUserResponse converts application DTO to HTTP response
 func ToUserResponse(dto appUser.UserDTO) UserResponse {
 	return UserResponse{
-		ID:        dto.ID,
-		Email:     dto.Email,
-		Name:      dto.Name,
-		Role:      dto.Role,
-		Active:    dto.Active,
-		CreatedAt: dto.CreatedAt,
-		UpdatedAt: dto.UpdatedAt,
+		ID:         dto.ID,
+		ExternalID: dto.ExternalID,
+		Email:      dto.Email,
+		Name:       dto.Name,
+		Role:       dto.Role,
+		Active:     dto.Active,
+		CreatedAt:  dto.CreatedAt,
+		UpdatedAt:  dto.UpdatedAt,
 	}
 }
 

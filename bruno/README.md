@@ -25,7 +25,7 @@ bruno/
 │   ├── Get Version.bru
 │   ├── List Versions.bru
 │   ├── Submit Version.bru
-│   ├── Review Version.bru      # ⭐ NEW: Optional manual review
+│   ├── Review Version.bru      # ⭐ Optional manual review
 │   ├── Approve Version.bru
 │   ├── Reject Version.bru
 │   ├── Publish Version.bru
@@ -41,6 +41,15 @@ bruno/
 ├── Deprecation/            # Deprecation workflow
 │   ├── Request Deprecation.bru
 │   └── Approve Deprecation.bru
+├── Publications/           # ⭐ Publication audit (Admin Only)
+│   ├── Get Publication.bru
+│   ├── List All Publications.bru
+│   ├── List Publications by Version.bru
+│   └── List Publications by Document.bru
+├── Subscriptions/          # ⭐ SNS email subscriptions (Admin Only)
+│   ├── Subscribe User.bru
+│   ├── Unsubscribe User.bru
+│   └── List Subscriptions.bru
 ├── Stakeholders/           # Stakeholder management
 │   ├── Add Stakeholder.bru
 │   └── List Stakeholders.bru
@@ -72,12 +81,14 @@ Download from [https://www.usebruno.com/](https://www.usebruno.com/)
 The collection uses these variables (configured in `bruno.json`):
 
 - `base_url`: http://localhost:8080 (default)
-- `user_id`: user-123 (default)
+- `user_id`: a123456 (7-character external ID, default)
+- `user_external_id`: a123456 (alias for user_id)
 - `document_id`: (auto-populated after creating document)
 - `version_id`: (auto-populated after creating version)
 - `stakeholder_id`: (auto-populated after adding stakeholder)
 - `deprecation_id`: (auto-populated after requesting deprecation)
-- `created_user_id`: (auto-populated after creating user)
+- `created_user_id`: (auto-populated after creating user - internal UUID)
+- `created_user_external_id`: (auto-populated after creating user - external ID)
 
 ### 4. Start the Service
 
@@ -89,280 +100,192 @@ make s3-create-bucket
 make run
 ```
 
-## 📝 Usage Guide
+## 🆔 User External IDs
 
-### Basic Workflow
+**IMPORTANT**: The API now uses 7-character external IDs for user identification.
 
-1. **Check Health**
-   - Run `Health/Health Check (ALB)` to verify service is running
-   - Should return `{"status": "healthy", ...}`
+### External ID Format
+- **Length**: Exactly 7 characters
+- **Characters**: Alphanumeric only (a-z, 0-9)
+- **Case**: Case-insensitive (stored as lowercase)
+- **Example**: `a123456`, `b789xyz`, `test001`
 
-2. **Create a Document**
-   - Run `Documents/Create Document`
-   - This automatically:
-     - Encodes `files/pattern-example.yaml` as base64
-     - Creates document with first version
-     - Saves `document_id` and `version_id` to variables
+### Using External IDs
+
+**In X-User-ID Header**:
+```http
+X-User-ID: a123456
+```
+
+**Creating a User**:
+```json
+POST /users
+{
+  "external_id": "a123456",
+  "email": "user@example.com",
+  "name": "John Doe",
+  "role": "contributor"
+}
+```
+
+**Response**:
+```json
+{
+  "id": "550e8400-...",          // Internal UUID (ignore)
+  "external_id": "a123456",       // Use this in X-User-ID
+  "email": "user@example.com",
+  "name": "John Doe",
+  "role": "contributor",
+  "active": true,
+  "created_at": "2026-04-30T...",
+  "updated_at": "2026-04-30T..."
+}
+```
+
+### Migration Note
+
+- **Old**: X-User-ID used UUID format (550e8400-e29b-41d4-a716-446655440000)
+- **New**: X-User-ID uses external ID format (a123456)
+- All existing requests have been updated to use `{{user_id}}` which defaults to `a123456`
+
+## 📝 Testing Workflows
+
+### Basic Flow
+
+1. **Create User**
+   ```
+   POST /users
+   → Auto-saves created_user_external_id
+   ```
+
+2. **Create Document**
+   ```
+   POST /documents
+   Headers: X-User-ID: {{user_id}}
+   → Auto-saves document_id and version_id
+   → Creator automatically added as owner stakeholder
+   ```
 
 3. **Submit for Review**
-   - Run `Versions/Submit Version`
-   - Moves version from DRAFT → SUBMITTED
+   ```
+   POST /versions/{{version_id}}/submit
+   Headers: X-User-ID: {{user_id}}
+   → Triggers approval workflow
+   ```
 
-4. **Review (Optional)**
-   - Run `Versions/Review Version` to manually transition to IN_REVIEW
-   - OR skip this step - first approval will auto-transition to IN_REVIEW
+4. **Grant Approvals**
+   ```
+   POST /approvals
+   Headers: X-User-ID: {{approver_user_id}}
+   → Must have approval role
+   ```
 
-5. **Approve Version**
-   - Run `Versions/Approve Version` (as engineer)
-   - Run `Versions/Approve Version` again (as architect)
-   - Approval role is automatically determined from user's role
-   - Version moves to APPROVED when all required approvals received
+5. **Publish Version**
+   ```
+   POST /versions/{{version_id}}/publish
+   Headers: X-User-ID: {{user_id}}
+   → Version becomes live
+   ```
 
-6. **Publish Version**
-   - Run `Versions/Publish Version`
-   - Makes version live (APPROVED → PUBLISHED)
+### Manual Review Flow (Optional)
 
-### Working with Files
-
-All requests that need file content use **pre-request scripts** to handle base64 encoding:
-
-```javascript
-const fs = require("fs");
-const filePath = bru.getVar("file_path") || "./files/pattern-example.yaml";
-const fileBuffer = fs.readFileSync(filePath);
-const base64String = fileBuffer.toString("base64");
-bru.setVar("file_base64", base64String);
+```
+Submit → [Optional] Manual Review → Auto Approvals → Publish
 ```
 
-**To use a different file:**
+- `POST /versions/{id}/review` - Trigger manual review
+- Review can be requested anytime after submit
+- Does not block automatic approvals
+- Approval summaries show both manual + auto approvals
 
-1. Add your file to `bruno/files/`
-2. Set the `file_path` variable before running the request:
-   - Right-click request → "Settings" → "Script" → "Pre Request"
-   - Or set in collection variables
+### Admin Operations
 
-**Example files provided:**
-- `files/pattern-example.yaml` - Example pattern document
+**Publications** (Admin Only):
+- Track all version publications
+- Audit who published what and when
+- Query by document, version, or time range
 
-## 🔑 Environment Variables
+**Subscriptions** (Admin Only):
+- Subscribe users to SNS topics
+- Receive email notifications for events
+- Manage subscription lifecycle
 
-The collection references these variables from your `.env`:
+## 🔐 Authentication
 
-```bash
-DOCUMENT_REGISTRY_HTTP_PORT=8080  # Used in base_url
+All endpoints (except health checks and user creation) require:
+
+```http
+X-User-ID: a123456
 ```
 
-If running on a different port, update `base_url` in collection variables.
+This identifies the user making the request using their 7-character external ID.
 
-## 📋 Request Categories
+## 📦 Variables Auto-Population
 
-### Health Checks (ECS-optimized)
+The collection uses post-response scripts to automatically populate variables:
 
-- **Health Check (ALB)** - For ALB target groups (Postgres + S3)
-- **Liveness Probe** - For container health checks (always 200)
-- **Readiness Check** - For monitoring (Postgres + S3 + SNS)
-- **Startup Check** - For container startup (10s timeout)
+- Creating a user → saves `created_user_external_id`
+- Creating a document → saves `document_id` and `version_id`
+- Adding a stakeholder → saves `stakeholder_id`
+- Requesting deprecation → saves `deprecation_id`
 
-### Documents
+This allows seamless request chaining without manual ID copying.
 
-- **Create Document** - Creates document with first version (base64 content)
-- **Get Document** - Retrieve document details
-- **List Documents** - Paginated list
-- **Search Documents** - Filter by name, tags, type, etc.
-- **Update Document** - Update metadata (name, description, tags)
+## 🏗️ Document Types
 
-### Versions
-
-- **Create Version** - Add new version to document (base64 content)
-- **Get Version** - Retrieve version details
-- **List Versions** - All versions of a document
-- **Submit Version** - Submit for review (DRAFT → SUBMITTED)
-- **Review Version** - ⭐ Optional manual transition to IN_REVIEW state
-- **Approve Version** - Approve version (auto-transitions to IN_REVIEW if needed, role determined by server)
-- **Reject Version** - Reject version (auto-transitions to IN_REVIEW first, then REJECTED)
-- **Publish Version** - Publish approved version (APPROVED → PUBLISHED)
-- **Get Version Status** - Detailed workflow status with approval progress
-
-### Validation
-
-- **Validate Content** - Validate YAML/JSON before creating (base64 content)
-
-### Approvals
-
-- **Grant Approval** - Grant approval for a version as stakeholder
-- **Revoke Approval** - Revoke a previously granted approval
-- **Get Approval** - Retrieve approval details by ID
-- **List Approvals** - View all approvals for a version
-- **Get Approval Summary** - Check approval progress (required/received/remaining)
-
-### Deprecation
-
-- **Request Deprecation** - Request to deprecate a version
-- **Approve Deprecation** - Approve deprecation request
-
-### Stakeholders
-
-- **Add Stakeholder** - Add user to document
-- **List Stakeholders** - View all stakeholders
-
-### Users
-
-- **Create User** - Register new user in system
-- **Get User** - Retrieve user details
-- **List Users** - View all users
-- **Update User** - Update user name/role (admin only)
-- **Deactivate User** - Soft delete user (admin only)
-- **Activate User** - Reactivate user (admin only)
-- **Delete User** - Permanently delete user (admin only)
-
-## 🎯 Testing Workflows
-
-### Complete Approval Workflow
-
-**Option 1: Auto-Transition (Recommended)**
-1. Create Document → `document_id` saved
-2. Submit Version → DRAFT → SUBMITTED
-3. Approve Version (engineer) → Auto-transitions to IN_REVIEW, creates approval (technical)
-4. Approve Version (architect) → Creates approval (architect), transitions to APPROVED
-5. Publish Version → APPROVED → PUBLISHED
-
-**Option 2: With Manual Review**
-1. Create Document → `document_id` saved
-2. Submit Version → DRAFT → SUBMITTED
-3. Review Version → SUBMITTED → IN_REVIEW (explicit)
-4. Approve Version (engineer) → Creates approval (technical)
-5. Approve Version (architect) → Creates approval (architect), transitions to APPROVED
-6. Publish Version → APPROVED → PUBLISHED
-
-**Versioning Flow**
-1. Create Version (v2.0.0)
-2. Submit, approve, publish v2.0.0
-3. Previous version auto-deprecates
-
-### Validation Workflow
-
-1. Validate Content → Check YAML is valid
-2. Create Document → If validation passes
-3. Create Version → Each version validated
-
-### Deprecation Workflow
-
-1. Request Deprecation → Creates deprecation request
-2. Approve Deprecation → Version moves to DEPRECATED
-
-### User Management Workflow
-
-1. Create User → `created_user_id` saved
-2. List Users → View all users in system
-3. Update User → Change role (admin only)
-4. Deactivate User → Soft delete (admin only)
-5. Activate User → Restore access (admin only)
-
-## 🔧 Customization
-
-### Adding Custom Files
-
-1. Create your file in `bruno/files/`
-2. Update the `file_path` variable in request
-3. Pre-request script will auto-encode to base64
-
-### Changing User ID
-
-Update `user_id` in collection variables to test different users.
-
-### Testing Different Document Types
-
-Currently supports:
-- `pattern` - YAML validation, approval workflow
-
-To test, change `document_type` in request body.
-
-## 📚 API Reference
-
-### ⭐ Important: Approval Role Changes
-
-**The `role` field has been REMOVED from approve/reject requests.**
-
-**Before** (old behavior):
+### Pattern (Requires Approval)
 ```json
-POST /versions/{id}/approve
 {
-  "role": "engineer",      // ❌ No longer needed
-  "comment": "LGTM"
+  "document_type": "pattern",
+  "content": "<base64-encoded-yaml>",
+  "validation": {
+    "format": "yaml"
+  }
 }
 ```
 
-**Now** (current behavior):
-```json
-POST /versions/{id}/approve
-{
-  "comment": "LGTM"        // ✅ Only comment needed
-}
-```
+**Approval Flow**:
+1. Submit version
+2. Automatic YAML validation
+3. Approvals from required roles
+4. Publish when all approved
 
-**How approval roles work now:**
+## 🎯 Best Practices
 
-| User Role | Approves As | Notes |
-|-----------|-------------|-------|
-| admin | technical | First available role |
-| architect | architect | - |
-| engineer | technical | - |
-| product | ❌ Cannot approve | Can only publish |
-| viewer | ❌ Cannot approve | Read-only |
-
-**Pattern document requirements:**
-- 1 technical approval (engineer or admin)
-- 1 architect approval (architect or admin)
-- Same user cannot provide multiple roles
-
-**Auto-Transition Behavior:**
-
-When you approve/reject a version in SUBMITTED state:
-1. Version automatically transitions to IN_REVIEW
-2. Then approval/rejection is processed
-3. No need to call `/review` separately (but you can if you want explicit control)
-
-See full documentation: [docs/API_WORKFLOW.md](../docs/API_WORKFLOW.md)
-
-See [README.md](../README.md#api-documentation) for complete API documentation.
+1. **Always use variables** for IDs rather than hardcoding
+2. **Check response status** in post-response scripts
+3. **Validate base64 encoding** for document content
+4. **Use correct user external IDs** in X-User-ID headers (7 chars)
+5. **Test with admin users** for admin-only endpoints
 
 ## 🐛 Troubleshooting
 
-### "Cannot read file"
+### "X-User-ID header is required"
+- Ensure you're setting the `X-User-ID` header
+- Use external ID format (e.g., `a123456`), not UUID
 
-**Error:** Pre-request script can't find file
+### "Invalid external ID format"
+- External ID must be exactly 7 alphanumeric characters
+- Case doesn't matter (converted to lowercase)
+- No special characters allowed
 
-**Solution:** Ensure file exists in `bruno/files/` or update `file_path` variable
+### "User not found or inactive"
+- User with that external ID doesn't exist
+- User may be deactivated
+- Create user first with `POST /users`
 
-### "Invalid base64"
+### "Validation failed"
+- Check document type requirements
+- Ensure content is properly base64 encoded
+- Verify YAML syntax for patterns
 
-**Error:** Content not properly encoded
+### "Insufficient approvals"
+- Check approval summary: `GET /approvals/summary?version_id={id}`
+- Ensure all required approval roles are granted
+- Wait for automatic approvals if applicable
 
-**Solution:** Check pre-request script ran (look for `file_base64` variable)
+## 📚 Additional Resources
 
-### "Document type required"
-
-**Error:** Validation endpoint requires document_type
-
-**Solution:** Ensure `document_type` field is in request body
-
-### "Document ID not set"
-
-**Error:** `document_id` variable is empty
-
-**Solution:** Run "Create Document" first (post-response script saves ID)
-
-## 💡 Tips
-
-1. **Run in order** - Requests are numbered (seq) for suggested order
-2. **Check responses** - Post-response scripts auto-save IDs
-3. **Use search** - Filter documents by tags for easier testing
-4. **Validate first** - Run validation before creating documents
-5. **Check health** - Always verify service is healthy first
-
-## 🔗 Related Documentation
-
-- [README.md](../README.md) - Full service documentation
-- [QUICKSTART.md](../QUICKSTART.md) - 5-minute setup guide
-- [ARCHITECTURE.md](../ARCHITECTURE.md) - Architecture details
-- [MIGRATIONS.md](../MIGRATIONS.md) - Database schema info
+- API Documentation: (Link to Swagger/OpenAPI)
+- Architecture Guide: See ARCHITECTURE.md
+- Error Codes: See pkg/errors/codes.go
