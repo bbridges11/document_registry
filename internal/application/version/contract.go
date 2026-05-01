@@ -8,8 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type Actor struct{ UserID string }
-
+type Actor struct {
+	UserID string
+	Role   string // User role for authorization
+}
 type CreateInput struct {
 	Actor      Actor
 	DocumentID uuid.UUID

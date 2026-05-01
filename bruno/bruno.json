@@ -6,11 +6,13 @@ meta {
 
 vars {
   base_url: http://localhost:8080
-  user_id: user-123
+  user_id: a123456
+  user_sid: a123456
   document_id: 
   version_id: 
   stakeholder_id: 
   approval_id: 
   deprecation_id: 
   created_user_id: 
+  created_user_sid: 
 }

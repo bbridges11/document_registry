@@ -16,7 +16,7 @@ headers {
 
 body:json {
   {
-    "external_id": "a123456",
+    "sid": "a123456",
     "email": "john.doe@example.com",
     "name": "John Doe",
     "role": "contributor"
@@ -27,17 +27,17 @@ script:post-response {
   if (res.status === 201) {
     const data = res.body;
     bru.setVar("created_user_id", data.id);
-    bru.setVar("created_user_external_id", data.external_id);
+    bru.setVar("created_user_sid", data.sid);
   }
 }
 
 docs {
-  Create a new user with external ID.
+  Create a new user with SID (Session ID).
   
-  **External ID**:
+  **SID (Session ID)**:
   - Format: Exactly 7 alphanumeric characters (e.g., "a123456")
   - Case-insensitive: Stored and compared as lowercase
-  - Unique: Cannot reuse existing external IDs
+  - Unique: Cannot reuse existing SIDs
   - Required: Must be provided
   
   **Roles**:
@@ -47,11 +47,11 @@ docs {
   
   **Response**:
   - id: Internal UUID (for system use only)
-  - external_id: Client-provided ID (use in X-User-ID header)
+  - sid: Client-provided SID (use in X-User-ID header)
   
   **Auto-saved variables**:
   - created_user_id: Internal UUID
-  - created_user_external_id: External ID for API requests
+  - created_user_sid: SID for API requests
   
-  **Use external_id in X-User-ID header for all subsequent requests.**
+  **Use sid in X-User-ID header for all subsequent requests.**
 }

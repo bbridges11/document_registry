@@ -10,6 +10,7 @@ import (
 
 type Actor struct {
 	UserID string
+	Role   string // User role for authorization
 }
 
 type CreateInput struct {

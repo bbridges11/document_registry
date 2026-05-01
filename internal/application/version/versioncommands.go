@@ -200,7 +200,7 @@ func (s *CommandService) ReviewVersion(ctx context.Context, cmd ReviewVersionCom
 
 	// Verify user has approval roles (only users who can approve can also review)
 	userID := try.To1(uuid.Parse(cmd.ReviewedBy))
-	availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID))
+	availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID, cmd.UserRole))
 
 	// Validate user has at least one approval role
 	if len(availableRoles) == 0 {
@@ -234,9 +234,9 @@ func (s *CommandService) ApproveVersion(ctx context.Context, cmd ApproveVersionC
 		policy := try.To1(s.policyFactory.GetPolicy(doc.DocumentType().ApprovalPolicy()))
 		wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
 
-		// Parse user ID and get approval roles from resolver
+		// Parse user ID and get approval roles from resolver (using role from Actor context)
 		userID := try.To1(uuid.Parse(cmd.ApprovedBy))
-		availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID))
+		availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID, cmd.UserRole))
 
 		// Validate user has at least one approval role
 		if len(availableRoles) == 0 {
@@ -325,7 +325,7 @@ func (s *CommandService) RejectVersion(ctx context.Context, cmd RejectVersionCom
 
 		// Verify user has approval roles (only users who can approve can also reject)
 		userID := try.To1(uuid.Parse(cmd.RejectedBy))
-		availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID))
+		availableRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, userID, cmd.UserRole))
 
 		// Validate user has at least one approval role
 		if len(availableRoles) == 0 {

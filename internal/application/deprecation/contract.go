@@ -28,4 +28,5 @@ type UseCase interface {
 // Actor represents the user performing an action
 type Actor struct {
 	UserID string
+	Role   string // User role for authorization
 }

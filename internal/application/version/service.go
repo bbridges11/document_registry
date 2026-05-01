@@ -71,13 +71,27 @@ func (s *Service) Submit(ctx context.Context, input SubmitInput) error {
 	return s.commands.SubmitVersion(ctx, SubmitVersionCommand{ID: input.ID, SubmittedBy: input.Actor.UserID})
 }
 func (s *Service) Review(ctx context.Context, input ReviewInput) error {
-	return s.commands.ReviewVersion(ctx, ReviewVersionCommand{ID: input.ID, ReviewedBy: input.Actor.UserID})
+	return s.commands.ReviewVersion(ctx, ReviewVersionCommand{
+		ID:         input.ID,
+		ReviewedBy: input.Actor.UserID,
+		UserRole:   input.Actor.Role,
+	})
 }
 func (s *Service) Approve(ctx context.Context, input ApproveInput) error {
-	return s.commands.ApproveVersion(ctx, ApproveVersionCommand{ID: input.ID, ApprovedBy: input.Actor.UserID, Comment: input.Comment})
+	return s.commands.ApproveVersion(ctx, ApproveVersionCommand{
+		ID:         input.ID,
+		ApprovedBy: input.Actor.UserID,
+		UserRole:   input.Actor.Role,
+		Comment:    input.Comment,
+	})
 }
 func (s *Service) Reject(ctx context.Context, input RejectInput) error {
-	return s.commands.RejectVersion(ctx, RejectVersionCommand{ID: input.ID, RejectedBy: input.Actor.UserID, Reason: input.Reason})
+	return s.commands.RejectVersion(ctx, RejectVersionCommand{
+		ID:         input.ID,
+		RejectedBy: input.Actor.UserID,
+		UserRole:   input.Actor.Role,
+		Reason:     input.Reason,
+	})
 }
 func (s *Service) Publish(ctx context.Context, input PublishInput) error {
 	return s.commands.PublishVersion(ctx, PublishVersionCommand{ID: input.ID, PublishedBy: input.Actor.UserID})

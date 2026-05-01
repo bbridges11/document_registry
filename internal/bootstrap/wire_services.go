@@ -74,7 +74,7 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 	documentService := appDocument.NewService(documentCommandService, documentQueryService)
 
 	// Create UserRoleResolver for version approvals
-	userRoleResolver := postgres.NewUserRoleResolverAdapter(infra.UserRepo)
+	userRoleResolver := postgres.NewUserRoleResolverAdapter()
 
 	versionCommandService := appVersion.NewCommandService(
 		infra.VersionRepo,

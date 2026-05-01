@@ -36,17 +36,20 @@ type SubmitVersionCommand struct {
 type ReviewVersionCommand struct {
 	ID         uuid.UUID
 	ReviewedBy string
+	UserRole   string // User role from Actor (avoids DB query)
 }
 
 type ApproveVersionCommand struct {
 	ID         uuid.UUID
 	ApprovedBy string
+	UserRole   string // User role from Actor (avoids DB query)
 	Comment    string
 }
 
 type RejectVersionCommand struct {
 	ID         uuid.UUID
 	RejectedBy string
+	UserRole   string // User role from Actor (avoids DB query)
 	Reason     string
 }
 

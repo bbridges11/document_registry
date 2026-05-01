@@ -26,7 +26,7 @@ func wireHTTP(cfg *config.Config, log *zap.Logger, _ *infrastructure, handlers *
 	userValidation := middleware.NewUserValidationMiddleware(handlers.UserQueries)
 	userValidationMW := userValidation.ValidateUserExists()
 
-	adminCheck := middleware.NewAdminCheckMiddleware(handlers.UserQueries)
+	adminCheck := middleware.NewAdminCheckMiddleware()
 	adminOnlyMW := adminCheck.RequireAdmin()
 
 	log.Info("registering HTTP handlers")

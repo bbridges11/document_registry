@@ -81,14 +81,14 @@ Download from [https://www.usebruno.com/](https://www.usebruno.com/)
 The collection uses these variables (configured in `bruno.json`):
 
 - `base_url`: http://localhost:8080 (default)
-- `user_id`: a123456 (7-character external ID, default)
-- `user_external_id`: a123456 (alias for user_id)
+- `user_id`: a123456 (7-character SID, default)
+- `user_sid`: a123456 (alias for user_id)
 - `document_id`: (auto-populated after creating document)
 - `version_id`: (auto-populated after creating version)
 - `stakeholder_id`: (auto-populated after adding stakeholder)
 - `deprecation_id`: (auto-populated after requesting deprecation)
 - `created_user_id`: (auto-populated after creating user - internal UUID)
-- `created_user_external_id`: (auto-populated after creating user - external ID)
+- `created_user_sid`: (auto-populated after creating user - SID)
 
 ### 4. Start the Service
 
@@ -100,17 +100,17 @@ make s3-create-bucket
 make run
 ```
 
-## 🆔 User External IDs
+## 🆔 User SIDs
 
-**IMPORTANT**: The API now uses 7-character external IDs for user identification.
+**IMPORTANT**: The API now uses 7-character SIDs for user identification.
 
-### External ID Format
+### SID Format
 - **Length**: Exactly 7 characters
 - **Characters**: Alphanumeric only (a-z, 0-9)
 - **Case**: Case-insensitive (stored as lowercase)
 - **Example**: `a123456`, `b789xyz`, `test001`
 
-### Using External IDs
+### Using SIDs
 
 **In X-User-ID Header**:
 ```http
@@ -121,7 +121,7 @@ X-User-ID: a123456
 ```json
 POST /users
 {
-  "external_id": "a123456",
+  "sid": "a123456",
   "email": "user@example.com",
   "name": "John Doe",
   "role": "contributor"
@@ -132,7 +132,7 @@ POST /users
 ```json
 {
   "id": "550e8400-...",          // Internal UUID (ignore)
-  "external_id": "a123456",       // Use this in X-User-ID
+  "sid": "a123456",       // Use this in X-User-ID
   "email": "user@example.com",
   "name": "John Doe",
   "role": "contributor",
@@ -145,7 +145,7 @@ POST /users
 ### Migration Note
 
 - **Old**: X-User-ID used UUID format (550e8400-e29b-41d4-a716-446655440000)
-- **New**: X-User-ID uses external ID format (a123456)
+- **New**: X-User-ID uses SID format (a123456)
 - All existing requests have been updated to use `{{user_id}}` which defaults to `a123456`
 
 ## 📝 Testing Workflows
@@ -155,7 +155,7 @@ POST /users
 1. **Create User**
    ```
    POST /users
-   → Auto-saves created_user_external_id
+   → Auto-saves created_user_sid
    ```
 
 2. **Create Document**
@@ -218,13 +218,13 @@ All endpoints (except health checks and user creation) require:
 X-User-ID: a123456
 ```
 
-This identifies the user making the request using their 7-character external ID.
+This identifies the user making the request using their 7-character SID.
 
 ## 📦 Variables Auto-Population
 
 The collection uses post-response scripts to automatically populate variables:
 
-- Creating a user → saves `created_user_external_id`
+- Creating a user → saves `created_user_sid`
 - Creating a document → saves `document_id` and `version_id`
 - Adding a stakeholder → saves `stakeholder_id`
 - Requesting deprecation → saves `deprecation_id`
@@ -255,22 +255,22 @@ This allows seamless request chaining without manual ID copying.
 1. **Always use variables** for IDs rather than hardcoding
 2. **Check response status** in post-response scripts
 3. **Validate base64 encoding** for document content
-4. **Use correct user external IDs** in X-User-ID headers (7 chars)
+4. **Use correct user SIDs** in X-User-ID headers (7 chars)
 5. **Test with admin users** for admin-only endpoints
 
 ## 🐛 Troubleshooting
 
 ### "X-User-ID header is required"
 - Ensure you're setting the `X-User-ID` header
-- Use external ID format (e.g., `a123456`), not UUID
+- Use SID format (e.g., `a123456`), not UUID
 
-### "Invalid external ID format"
-- External ID must be exactly 7 alphanumeric characters
+### "Invalid SID format"
+- SID must be exactly 7 alphanumeric characters
 - Case doesn't matter (converted to lowercase)
 - No special characters allowed
 
 ### "User not found or inactive"
-- User with that external ID doesn't exist
+- User with that SID doesn't exist
 - User may be deactivated
 - Create user first with `POST /users`
 
