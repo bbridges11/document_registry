@@ -83,7 +83,7 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 		infra.DeprecationRepo,
 		infra.PublicationRepo,
 		infra.StorageService,
-		infra.PublisherService,
+		infra.PublisherRegistry,
 		infra.Runner,
 		infra.UserRepo,
 		userRoleResolver,

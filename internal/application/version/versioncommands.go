@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/bbridges_11/document-registry/internal/adapters/outbound/publisher"
 	"github.com/bbridges_11/document-registry/internal/domain/approval"
 	"github.com/bbridges_11/document-registry/internal/domain/deprecation"
 	"github.com/bbridges_11/document-registry/internal/domain/publication"
@@ -22,20 +23,20 @@ import (
 )
 
 type CommandService struct {
-	versionRepo      outbound.VersionRepository
-	documentRepo     outbound.DocumentRepository
-	approvalRepo     outbound.ApprovalRepository
-	deprecationRepo  outbound.DeprecationRepository
-	publicationRepo  outbound.PublicationRepository
-	storageService   outbound.StorageService
-	publisherService outbound.PublisherService
-	txManager        outbound.TransactionManager
-	userRepo         outbound.UserRepository
-	userRoleResolver outbound.UserRoleResolver
-	eventBus         outbound.EventBus
-	workflowFactory  *workflow.Factory
-	policyFactory    *approval.PolicyFactory
-	contentValidator outbound.ContentValidator
+	versionRepo       outbound.VersionRepository
+	documentRepo      outbound.DocumentRepository
+	approvalRepo      outbound.ApprovalRepository
+	deprecationRepo   outbound.DeprecationRepository
+	publicationRepo   outbound.PublicationRepository
+	storageService    outbound.StorageService
+	publisherRegistry *publisher.DestinationRegistry
+	txManager         outbound.TransactionManager
+	userRepo          outbound.UserRepository
+	userRoleResolver  outbound.UserRoleResolver
+	eventBus          outbound.EventBus
+	workflowFactory   *workflow.Factory
+	policyFactory     *approval.PolicyFactory
+	contentValidator  outbound.ContentValidator
 }
 
 func NewCommandService(
@@ -45,7 +46,7 @@ func NewCommandService(
 	deprecationRepo outbound.DeprecationRepository,
 	publicationRepo outbound.PublicationRepository,
 	storageService outbound.StorageService,
-	publisherService outbound.PublisherService,
+	publisherRegistry *publisher.DestinationRegistry,
 	txManager outbound.TransactionManager,
 	userRepo outbound.UserRepository,
 	userRoleResolver outbound.UserRoleResolver,
@@ -55,20 +56,20 @@ func NewCommandService(
 	contentValidator outbound.ContentValidator,
 ) *CommandService {
 	return &CommandService{
-		versionRepo:      versionRepo,
-		documentRepo:     documentRepo,
-		approvalRepo:     approvalRepo,
-		deprecationRepo:  deprecationRepo,
-		publicationRepo:  publicationRepo,
-		storageService:   storageService,
-		publisherService: publisherService,
-		txManager:        txManager,
-		userRepo:         userRepo,
-		userRoleResolver: userRoleResolver,
-		eventBus:         eventBus,
-		workflowFactory:  workflowFactory,
-		policyFactory:    policyFactory,
-		contentValidator: contentValidator,
+		versionRepo:       versionRepo,
+		documentRepo:      documentRepo,
+		approvalRepo:      approvalRepo,
+		deprecationRepo:   deprecationRepo,
+		publicationRepo:   publicationRepo,
+		storageService:    storageService,
+		publisherRegistry: publisherRegistry,
+		txManager:         txManager,
+		userRepo:          userRepo,
+		userRoleResolver:  userRoleResolver,
+		eventBus:          eventBus,
+		workflowFactory:   workflowFactory,
+		policyFactory:     policyFactory,
+		contentValidator:  contentValidator,
 	}
 }
 
@@ -366,6 +367,22 @@ func (s *CommandService) PublishVersion(ctx context.Context, cmd PublishVersionC
 		return errors.New(errors.CodeInvalidArgument, "destination is required")
 	}
 
+	// Validate environment
+	if cmd.Environment == "" {
+		return errors.New(errors.CodeInvalidArgument, "environment is required")
+	}
+
+	// Get publisher from registry
+	publisherService, err := s.publisherRegistry.GetPublisher(cmd.Destination)
+	if err != nil {
+		return errors.New(errors.CodeInvalidArgument, fmt.Sprintf("invalid destination: %v", err))
+	}
+
+	// Validate environment is supported
+	if err := publisherService.ValidateEnvironment(cmd.Environment); err != nil {
+		return errors.New(errors.CodeInvalidArgument, fmt.Sprintf("invalid environment: %v", err))
+	}
+
 	var eventsToPublish []events.Event
 	var pub *publication.Publication
 
@@ -396,16 +413,17 @@ func (s *CommandService) PublishVersion(ctx context.Context, cmd PublishVersionC
 		// Read content into bytes
 		contentBytes := try.To1(io.ReadAll(content))
 
-		// Call external API to publish
+		// Call publisher with environment
 		publishReq := outbound.PublishRequest{
 			DocumentID:    ver.DocumentID().String(),
 			VersionNumber: ver.Version().String(),
 			Content:       contentBytes,
 			Metadata:      ver.Metadata(),
 			Destination:   cmd.Destination,
+			Environment:   cmd.Environment,
 		}
 
-		err := s.publisherService.Publish(txCtx, publishReq)
+		err := publisherService.Publish(txCtx, publishReq)
 		if err != nil {
 			// Publication failed - create failed publication record
 			failedPub := try.To1(publication.NewPublication(
@@ -417,7 +435,7 @@ func (s *CommandService) PublishVersion(ctx context.Context, cmd PublishVersionC
 			failedPub.MarkAsFailed(err.Error())
 			try.To(s.publicationRepo.Save(txCtx, failedPub))
 
-			return fmt.Errorf("failed to publish to external system: %w", err)
+			return fmt.Errorf("failed to publish to %s (%s): %w", cmd.Destination, cmd.Environment, err)
 		}
 
 		// Publication successful - create success publication record

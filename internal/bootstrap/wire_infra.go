@@ -7,6 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sns"
 	notificationSNS "github.com/bbridges_11/document-registry/internal/adapters/outbound/notification/sns"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/persistence/postgres"
+	"github.com/bbridges_11/document-registry/internal/adapters/outbound/publisher"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/publisher/mock"
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/storage"
 	storageS3 "github.com/bbridges_11/document-registry/internal/adapters/outbound/storage/s3"
@@ -33,6 +34,7 @@ type infrastructure struct {
 	StorageService      outbound.StorageService
 	PublisherService    outbound.PublisherService
 	NotificationService outbound.NotificationService
+	PublisherRegistry   *publisher.DestinationRegistry
 	S3Client            *s3.Client
 	SNSClient           *sns.Client
 	AWSConfig           config.AWSConfig
@@ -95,7 +97,7 @@ func wireInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 
 	publisherService := mock.NewPublisherAdapter(log)
 
-	return &infrastructure{
+	infra := &infrastructure{
 		Runner:              runner,
 		EventBus:            eventBus,
 		DocumentRepo:        postgres.NewDocumentRepository(runner),
@@ -112,4 +114,8 @@ func wireInfrastructure(ctx context.Context, cfg *config.Config, log *zap.Logger
 		SNSClient:           snsClient,
 		AWSConfig:           cfg.AWS,
 	}
+
+	infra.PublisherRegistry = wirePublishers(infra, log)
+
+	return infra
 }
