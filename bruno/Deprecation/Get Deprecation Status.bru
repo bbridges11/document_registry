@@ -1,0 +1,32 @@
+meta {
+  name: Get Deprecation Status
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/versions/{{version_id}}/deprecation/status
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get deprecation approval status for a version.
+  
+  **Endpoint**: GET /versions/:id/deprecation/status
+  
+  **Returns**:
+  - Current status (pending, approved, rejected)
+  - Required approval count
+  - Received approval count
+  - List of approvals with:
+    - Approver user ID
+    - Role
+    - Comment
+    - Approved at timestamp
+  - Remaining required roles (if any)
+}

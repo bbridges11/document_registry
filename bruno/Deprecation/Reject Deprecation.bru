@@ -1,0 +1,35 @@
+meta {
+  name: Reject Deprecation
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/deprecation/reject
+  body: json
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "reason": "Migration path not clear, need more documentation"
+  }
+}
+
+docs {
+  Reject a deprecation request.
+  
+  **Endpoint**: POST /versions/:id/deprecation/reject
+  
+  **Required Fields**:
+  - reason: Why the deprecation is being rejected
+  
+  **Result**:
+  - Deprecation request is rejected
+  - Version remains in current status (typically PUBLISHED)
+}

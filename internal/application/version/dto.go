@@ -56,7 +56,8 @@ type RejectVersionCommand struct {
 type PublishVersionCommand struct {
 	ID          uuid.UUID
 	PublishedBy string
-	Destination string // Where to publish (e.g., "dev-portal", "prod-gateway")
+	Destination string // Where to publish (e.g., "dev-portal", "s3", "sns")
+	Environment string // Which environment (e.g., "dev", "staging", "prod")
 }
 
 type GetVersionQuery struct {

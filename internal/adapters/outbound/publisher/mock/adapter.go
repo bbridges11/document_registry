@@ -27,11 +27,22 @@ func (p *PublisherAdapter) Publish(ctx context.Context, request outbound.Publish
 		zap.String("document_id", request.DocumentID),
 		zap.String("version_number", request.VersionNumber),
 		zap.String("destination", request.Destination),
+		zap.String("environment", request.Environment),
 		zap.Int("content_size", len(request.Content)),
 		zap.Any("metadata", request.Metadata),
 	)
 
 	// Simulate successful publish
 	// In production, this would call an external API
+	return nil
+}
+
+// SupportedEnvironments returns all standard environments for mock
+func (p *PublisherAdapter) SupportedEnvironments() []string {
+	return []string{"dev", "staging", "prod"}
+}
+
+// ValidateEnvironment always returns nil for mock (accepts all environments)
+func (p *PublisherAdapter) ValidateEnvironment(environment string) error {
 	return nil
 }

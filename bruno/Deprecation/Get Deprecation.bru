@@ -1,0 +1,32 @@
+meta {
+  name: Get Deprecation
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/versions/{{version_id}}/deprecation
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Get deprecation details for a version.
+  
+  **Endpoint**: GET /versions/:id/deprecation
+  
+  **Returns**:
+  - Deprecation ID
+  - Version ID
+  - Document ID
+  - Reason
+  - Deprecation note
+  - Requested by (user ID)
+  - Requested at (timestamp)
+  - Status (pending, approved, rejected, cancelled)
+  - Approvals (if any)
+}

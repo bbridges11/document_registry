@@ -5,7 +5,7 @@ meta {
 }
 
 post {
-  url: {{base_url}}/deprecations/{{deprecation_id}}/approve
+  url: {{base_url}}/versions/{{version_id}}/deprecation/approve
   body: json
   auth: none
 }
@@ -17,6 +17,7 @@ headers {
 
 body:json {
   {
+    "role": "admin",
     "comment": "Approved - migration path is clear"
   }
 }
@@ -24,5 +25,15 @@ body:json {
 docs {
   Approve a deprecation request.
   
-  Version moves to DEPRECATED status.
+  **Endpoint**: POST /versions/:id/deprecation/approve
+  
+  **Required Fields**:
+  - role: Approval role (admin, architect, technical)
+  
+  **Optional Fields**:
+  - comment: Approval comment
+  
+  **Result**:
+  - Adds approval to deprecation
+  - When all required approvals received, version moves to DEPRECATED status
 }

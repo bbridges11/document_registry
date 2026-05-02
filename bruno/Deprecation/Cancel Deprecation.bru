@@ -1,0 +1,28 @@
+meta {
+  name: Cancel Deprecation
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/versions/{{version_id}}/deprecation/cancel
+  body: none
+  auth: none
+}
+
+headers {
+  X-User-ID: {{user_id}}
+}
+
+docs {
+  Cancel a pending deprecation request.
+  
+  **Endpoint**: POST /versions/:id/deprecation/cancel
+  
+  **No Body Required**
+  
+  **Result**:
+  - Deprecation request is cancelled
+  - Version remains in current status
+  - Can only cancel if deprecation is in PENDING status
+}

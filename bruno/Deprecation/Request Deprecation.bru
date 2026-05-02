@@ -23,18 +23,27 @@ body:json {
 }
 
 script:post-response {
-  if (res.status === 201 || res.status === 200) {
+  if (res.status === 201) {
     const data = res.body;
-    bru.setVar("deprecation_id", data.deprecation_id);
+    bru.setVar("deprecation_id", data.id);
   }
 }
 
 docs {
   Request deprecation of a published version.
   
-  For pattern documents:
-  - Manual deprecation requires approval
-  - Auto-deprecation (when new version published) doesn't require approval
+  **Endpoint**: POST /versions/:id/deprecate
   
-  Saves deprecation_id for approval/rejection.
+  **Required Fields**:
+  - reason: Why the version should be deprecated
+  
+  **Optional Fields**:
+  - deprecation_note: Additional migration guidance
+  
+  **Flow**:
+  - Creates deprecation request
+  - For pattern documents: requires approval workflow
+  - For auto-deprecation (when new version published): approved automatically
+  
+  **Auto-saves**: deprecation_id for approval/rejection operations
 }

@@ -144,6 +144,9 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 	// Create validation service
 	validationService := appValidation.NewService(contentValidator)
 
+	//wire pblisher
+	wirePublishers(infra, log)
+
 	return &httpHandlers{
 		Health:       health.NewHandler(infra.Runner, infra.S3Client, infra.SNSClient, infra.AWSConfig, log),
 		Document:     document.NewHandler(documentService),
