@@ -185,3 +185,33 @@ func (e VersionPublished) Type() EventType {
 func (e VersionPublished) OccurredAt() time.Time {
 	return e.occurredAt
 }
+
+type ReviewersAssigned struct {
+	VersionID    string
+	DocumentID   string
+	DocumentName string
+	VersionNum   string
+	DocumentType string
+	ReviewerIDs  []string // User IDs assigned as reviewers
+	occurredAt   time.Time
+}
+
+func NewReviewersAssigned(versionID, documentID, documentName, versionNum, documentType string, reviewerIDs []string) ReviewersAssigned {
+	return ReviewersAssigned{
+		VersionID:    versionID,
+		DocumentID:   documentID,
+		DocumentName: documentName,
+		VersionNum:   versionNum,
+		DocumentType: documentType,
+		ReviewerIDs:  reviewerIDs,
+		occurredAt:   time.Now().UTC(),
+	}
+}
+
+func (e ReviewersAssigned) Type() EventType {
+	return EventReviewersAssigned
+}
+
+func (e ReviewersAssigned) OccurredAt() time.Time {
+	return e.occurredAt
+}

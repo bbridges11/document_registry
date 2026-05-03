@@ -23,9 +23,11 @@ const (
 	EventVersionRejected      EventType = "version.rejected"
 	EventVersionPublished     EventType = "version.published"
 	EventVersionDeprecated    EventType = "version.deprecated"
+	EventReviewersAssigned    EventType = "version.reviewers_assigned"
 
 	// Deprecation events
 	EventDeprecationRequested     EventType = "deprecation.requested"
+	EventDeprecationApprovalAdded EventType = "deprecation.approval_added"
 	EventVersionLocked            EventType = "version.locked"
 	EventDeprecationApproved      EventType = "deprecation.approved"
 	EventDeprecationRejected      EventType = "deprecation.rejected"

@@ -19,9 +19,16 @@ func registerNotificationHandlers(infra *infrastructure, log *zap.Logger) {
 		log,
 	)
 
+	reviewerNotificationHandler := handlers.NewReviewerNotificationHandler(
+		infra.UserRepo,
+		infra.NotificationService,
+		log,
+	)
+
 	// Subscribe to events
 	infra.EventBus.Subscribe(events.EventVersionApproved, notificationHandler.HandleVersionApproved)
 	infra.EventBus.Subscribe(events.EventVersionFullyApproved, notificationHandler.HandleVersionFullyApproved)
+	infra.EventBus.Subscribe(events.EventReviewersAssigned, reviewerNotificationHandler.Handle)
 
 	registerStakeholderHandlers(infra, log)
 

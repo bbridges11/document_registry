@@ -9,8 +9,10 @@ import (
 	"github.com/bbridges_11/document-registry/internal/adapters/outbound/publisher"
 	"github.com/bbridges_11/document-registry/internal/domain/approval"
 	"github.com/bbridges_11/document-registry/internal/domain/deprecation"
+	"github.com/bbridges_11/document-registry/internal/domain/document"
 	"github.com/bbridges_11/document-registry/internal/domain/publication"
 	"github.com/bbridges_11/document-registry/internal/domain/shared"
+	"github.com/bbridges_11/document-registry/internal/domain/stakeholder"
 	"github.com/bbridges_11/document-registry/internal/domain/version"
 	"github.com/bbridges_11/document-registry/internal/domain/workflow"
 	"github.com/bbridges_11/document-registry/internal/events"
@@ -33,6 +35,7 @@ type CommandService struct {
 	txManager         outbound.TransactionManager
 	userRepo          outbound.UserRepository
 	userRoleResolver  outbound.UserRoleResolver
+	stakeholderRepo   outbound.StakeholderRepository
 	eventBus          outbound.EventBus
 	workflowFactory   *workflow.Factory
 	policyFactory     *approval.PolicyFactory
@@ -50,6 +53,7 @@ func NewCommandService(
 	txManager outbound.TransactionManager,
 	userRepo outbound.UserRepository,
 	userRoleResolver outbound.UserRoleResolver,
+	stakeholderRepo outbound.StakeholderRepository,
 	eventBus outbound.EventBus,
 	workflowFactory *workflow.Factory,
 	policyFactory *approval.PolicyFactory,
@@ -66,6 +70,7 @@ func NewCommandService(
 		txManager:         txManager,
 		userRepo:          userRepo,
 		userRoleResolver:  userRoleResolver,
+		stakeholderRepo:   stakeholderRepo,
 		eventBus:          eventBus,
 		workflowFactory:   workflowFactory,
 		policyFactory:     policyFactory,
@@ -176,11 +181,41 @@ func (s *CommandService) SubmitVersion(ctx context.Context, cmd SubmitVersionCom
 	doc := try.To1(s.documentRepo.GetByID(ctx, ver.DocumentID()))
 	wf := try.To1(s.workflowFactory.GetWorkflow(doc.DocumentType().WorkflowType()))
 
-	try.To(ver.Submit(cmd.SubmittedBy, wf))
-	try.To(s.versionRepo.Save(ctx, ver))
+	// Collect events to publish after transaction
+	var reviewerAssignmentEvents []events.Event
 
-	// Publish events after successful persistence
+	// Submit version and auto-assign reviewers in transaction
+	try.To(s.txManager.WithinTransaction(ctx, func(txCtx context.Context) error {
+		// Submit version
+		try.To(ver.Submit(cmd.SubmittedBy, wf))
+		try.To(s.versionRepo.Save(txCtx, ver))
+
+		// Auto-assign reviewers and collect assigned user IDs
+		assignedUserIDs := try.To1(s.assignReviewers(txCtx, ver, doc))
+
+		// Build ReviewersAssigned event if reviewers were assigned
+		if len(assignedUserIDs) > 0 {
+			event := events.NewReviewersAssigned(
+				ver.ID().String(),
+				doc.ID().String(),
+				doc.Name(),
+				ver.Version().String(),
+				doc.DocumentType().String(),
+				assignedUserIDs,
+			)
+			reviewerAssignmentEvents = append(reviewerAssignmentEvents, event)
+		}
+
+		return nil
+	}))
+
+	// Publish version events after transaction commits
 	s.publishEvents(ctx, ver, "")
+
+	// Publish reviewer assignment events after transaction commits
+	for _, event := range reviewerAssignmentEvents {
+		s.eventBus.Publish(ctx, events.NewEnvelope(event, ""))
+	}
 
 	return nil
 }
@@ -514,4 +549,83 @@ func (s *CommandService) publishValidationEvent(ctx context.Context, documentID,
 		"",
 	)
 	s.eventBus.Publish(ctx, envelope)
+}
+
+// assignReviewers automatically assigns reviewers based on the document's approval policy
+// Returns the list of user IDs that were assigned as reviewers
+func (s *CommandService) assignReviewers(ctx context.Context, ver *version.Version, doc *document.Document) ([]string, error) {
+	// Get approval policy for document type
+	policy := try.To1(s.policyFactory.GetPolicy(doc.DocumentType().ApprovalPolicy()))
+
+	// Get required approval roles from policy
+	requiredRoles := policy.RequiredApprovals()
+
+	// Collect all users to assign (deduplicated)
+	assignedUserIDs := make(map[string]bool)
+
+	// For each required approval role, find users with that role
+	for approvalRole := range requiredRoles {
+		userIDs := try.To1(s.findUsersWithApprovalRole(ctx, approvalRole))
+
+		for _, userID := range userIDs {
+			// Ensure user is a stakeholder
+			try.To(s.ensureStakeholder(ctx, doc.ID(), userID))
+
+			// Track assigned user (deduplicate)
+			assignedUserIDs[userID] = true
+		}
+	}
+
+	// Return list of assigned user IDs
+	userIDList := make([]string, 0, len(assignedUserIDs))
+	for userID := range assignedUserIDs {
+		userIDList = append(userIDList, userID)
+	}
+
+	return userIDList, nil
+}
+
+// findUsersWithApprovalRole finds all active users who have the specified approval role
+func (s *CommandService) findUsersWithApprovalRole(ctx context.Context, approvalRole approval.ApprovalRole) ([]string, error) {
+	// Get all active users from the system
+	allUsers := try.To1(s.userRepo.ListAll(ctx))
+
+	var matchingUserIDs []string
+
+	// Filter users by approval role
+	for _, user := range allUsers {
+		// Skip inactive users
+		if !user.Active() {
+			continue
+		}
+
+		// Get approval roles for this user
+		approvalRoles := try.To1(s.userRoleResolver.GetApprovalRoles(ctx, user.ID(), string(user.Role())))
+
+		// Check if user has the required approval role
+		for _, role := range approvalRoles {
+			if role == approvalRole {
+				matchingUserIDs = append(matchingUserIDs, user.ID().String())
+				break
+			}
+		}
+	}
+
+	return matchingUserIDs, nil
+}
+
+// ensureStakeholder ensures a user is a stakeholder for the document
+func (s *CommandService) ensureStakeholder(ctx context.Context, documentID uuid.UUID, userID string) error {
+	// Check if user is already a stakeholder
+	exists := try.To1(s.stakeholderRepo.ExistsByDocumentIDAndUserID(ctx, documentID, userID))
+
+	if exists {
+		return nil // Already a stakeholder, nothing to do
+	}
+
+	// Create new stakeholder with contributor role (needed for review/approval)
+	sh := try.To1(stakeholder.NewStakeholder(documentID, userID, stakeholder.RoleContributor))
+
+	// Save stakeholder
+	return s.stakeholderRepo.Save(ctx, sh)
 }
