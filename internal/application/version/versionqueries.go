@@ -2,6 +2,9 @@ package version
 
 import (
 	"context"
+	"encoding/base64"
+	"io"
+	"strings"
 
 	"github.com/bbridges_11/document-registry/internal/domain/approval"
 	domainDoc "github.com/bbridges_11/document-registry/internal/domain/document"
@@ -17,6 +20,7 @@ type QueryService struct {
 	documentRepo    outbound.DocumentRepository
 	approvalRepo    outbound.ApprovalRepository
 	userRepo        outbound.UserRepository
+	storageService  outbound.StorageService
 	workflowFactory *workflow.Factory
 	policyFactory   *approval.PolicyFactory
 }
@@ -26,6 +30,7 @@ func NewQueryService(
 	documentRepo outbound.DocumentRepository,
 	approvalRepo outbound.ApprovalRepository,
 	userRepo outbound.UserRepository,
+	storageService outbound.StorageService,
 	workflowFactory *workflow.Factory,
 	policyFactory *approval.PolicyFactory,
 ) *QueryService {
@@ -34,6 +39,7 @@ func NewQueryService(
 		documentRepo:    documentRepo,
 		approvalRepo:    approvalRepo,
 		userRepo:        userRepo,
+		storageService:  storageService,
 		workflowFactory: workflowFactory,
 		policyFactory:   policyFactory,
 	}
@@ -44,7 +50,7 @@ func (s *QueryService) GetVersion(ctx context.Context, query GetVersionQuery, us
 
 	ver := try.To1(s.versionRepo.GetByID(ctx, query.ID))
 
-	return &VersionDTO{
+	dto = &VersionDTO{
 		ID:          ver.ID(),
 		DocumentID:  ver.DocumentID(),
 		Version:     ver.Version().String(),
@@ -55,7 +61,19 @@ func (s *QueryService) GetVersion(ctx context.Context, query GetVersionQuery, us
 		CreatedBy:   ver.CreatedBy(),
 		CreatedAt:   ver.CreatedAt(),
 		UpdatedAt:   ver.UpdatedAt(),
-	}, nil
+	}
+
+	// Include content if requested
+	if query.IncludeContent {
+		content := try.To1(s.storageService.Download(ctx, ver.ContentRef()))
+		defer content.Close()
+
+		contentBytes := try.To1(io.ReadAll(content))
+		dto.Content = base64.StdEncoding.EncodeToString(contentBytes)
+		dto.ContentType = detectContentType(contentBytes)
+	}
+
+	return dto, nil
 }
 
 func (s *QueryService) ListVersionsByDocument(ctx context.Context, query ListVersionsByDocumentQuery, userID string) (dtos []*VersionDTO, err error) {
@@ -245,4 +263,42 @@ func (s *QueryService) getApprovalSummary(ctx context.Context, versionID uuid.UU
 		Remaining: remaining,
 		Complete:  complete,
 	}, nil
+}
+
+// GetVersionContent streams the raw version content
+func (s *QueryService) GetVersionContent(ctx context.Context, query GetVersionContentQuery, userID string) (content io.ReadCloser, contentType string, err error) {
+	defer err2.Handle(&err)
+
+	ver := try.To1(s.versionRepo.GetByID(ctx, query.ID))
+
+	// Download content from storage
+	contentStream := try.To1(s.storageService.Download(ctx, ver.ContentRef()))
+
+	// Read first bytes to detect content type
+	buf := make([]byte, 512)
+	n, _ := contentStream.Read(buf)
+	contentType = detectContentType(buf[:n])
+
+	// Close and re-download to reset stream
+	contentStream.Close()
+	contentStream = try.To1(s.storageService.Download(ctx, ver.ContentRef()))
+
+	return contentStream, contentType, nil
+}
+
+// detectContentType determines MIME type from content
+func detectContentType(data []byte) string {
+	// Trim whitespace and check first character
+	trimmed := strings.TrimSpace(string(data))
+	if len(trimmed) == 0 {
+		return "application/octet-stream"
+	}
+
+	// Check for JSON
+	if trimmed[0] == '{' || trimmed[0] == '[' {
+		return "application/json"
+	}
+
+	// Default to YAML
+	return "application/x-yaml"
 }

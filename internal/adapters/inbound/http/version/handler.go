@@ -38,6 +38,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, mw *MiddlewareConfig) {
 	e.POST("/documents/:documentId/versions", h.CreateVersion, standardMW...)
 	e.GET("/documents/:documentId/versions", h.ListVersionsByDocument, standardMW...)
 	e.GET("/versions/:id", h.GetVersion, standardMW...)
+	e.GET("/versions/:id/content", h.GetVersionContent, standardMW...)
 	e.PUT("/versions/:id", h.UpdateVersion, protectedMW...)
 	e.POST("/versions/:id/submit", h.SubmitVersion, protectedMW...)
 	e.POST("/versions/:id/review", h.ReviewVersion, protectedMW...)
@@ -102,12 +103,48 @@ func (h *Handler) GetVersion(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
 	}
-	view, err := h.versions.Get(c.Request().Context(), appver.GetInput{Actor: a, ID: id})
+
+	// Check if content should be included
+	includeContent := c.QueryParam("include_content") == "true"
+
+	view, err := h.versions.Get(c.Request().Context(), appver.GetInput{
+		Actor:          a,
+		ID:             id,
+		IncludeContent: includeContent,
+	})
 	if err != nil {
 		return handleError(c, err)
 	}
 	return c.JSON(http.StatusOK, toVersionResponse(view))
 }
+
+func (h *Handler) GetVersionContent(c echo.Context) error {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid version ID"})
+	}
+	a, err := actor(c)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "unauthorized"})
+	}
+
+	// Stream raw content
+	content, contentType, err := h.versions.GetContent(c.Request().Context(), appver.GetInput{
+		Actor: a,
+		ID:    id,
+	})
+	if err != nil {
+		return handleError(c, err)
+	}
+	defer content.Close()
+
+	// Set headers for download
+	c.Response().Header().Set("Content-Type", contentType)
+	c.Response().Header().Set("Content-Disposition", "attachment; filename=version.yaml")
+
+	return c.Stream(http.StatusOK, contentType, content)
+}
+
 func (h *Handler) ListVersionsByDocument(c echo.Context) error {
 	documentID, err := uuid.Parse(c.Param("documentId"))
 	if err != nil {

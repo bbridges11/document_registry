@@ -97,6 +97,7 @@ func wireApplication(_ context.Context, _ *config.Config, log *zap.Logger, infra
 		infra.DocumentRepo,
 		infra.ApprovalRepo,
 		infra.UserRepo,
+		infra.StorageService,
 		workflowFactory,
 		policyFactory,
 	)

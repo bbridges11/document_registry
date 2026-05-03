@@ -61,6 +61,11 @@ type PublishVersionCommand struct {
 }
 
 type GetVersionQuery struct {
+	ID             uuid.UUID
+	IncludeContent bool // If true, fetch and include base64-encoded content
+}
+
+type GetVersionContentQuery struct {
 	ID uuid.UUID
 }
 
@@ -83,6 +88,8 @@ type VersionDTO struct {
 	Status      workflow.Status
 	ContentKey  string // Generic key - abstracted from storage backend
 	ContentHash string
+	Content     string // Base64-encoded content (only if IncludeContent=true)
+	ContentType string // MIME type (only if IncludeContent=true)
 	Metadata    map[string]any
 	CreatedBy   string
 	CreatedAt   time.Time

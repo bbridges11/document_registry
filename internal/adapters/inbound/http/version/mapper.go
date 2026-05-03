@@ -3,7 +3,20 @@ package version
 import appver "github.com/bbridges_11/document-registry/internal/application/version"
 
 func toVersionResponse(v appver.VersionView) VersionResponse {
-	return VersionResponse{ID: v.ID, DocumentID: v.DocumentID, Version: v.Version, Status: v.Status, ContentS3Key: v.ContentKey, ContentHash: v.ContentHash, Metadata: v.Metadata, CreatedBy: v.CreatedBy, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
+	return VersionResponse{
+		ID:           v.ID,
+		DocumentID:   v.DocumentID,
+		Version:      v.Version,
+		Status:       v.Status,
+		ContentS3Key: v.ContentKey,
+		ContentHash:  v.ContentHash,
+		Content:      v.Content,
+		ContentType:  v.ContentType,
+		Metadata:     v.Metadata,
+		CreatedBy:    v.CreatedBy,
+		CreatedAt:    v.CreatedAt,
+		UpdatedAt:    v.UpdatedAt,
+	}
 }
 
 func toCreateVersionResponse(output appver.CreateOutput) CreateVersionResponse {

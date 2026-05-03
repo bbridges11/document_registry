@@ -2,6 +2,7 @@ package version
 
 import (
 	"context"
+	"io"
 )
 
 type Service struct {
@@ -43,11 +44,18 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (CreateOutput, 
 	return output, nil
 }
 func (s *Service) Get(ctx context.Context, input GetInput) (VersionView, error) {
-	dto, err := s.queries.GetVersion(ctx, GetVersionQuery{ID: input.ID}, input.Actor.UserID)
+	dto, err := s.queries.GetVersion(ctx, GetVersionQuery{
+		ID:             input.ID,
+		IncludeContent: input.IncludeContent,
+	}, input.Actor.UserID)
 	if err != nil {
 		return VersionView{}, err
 	}
 	return toVersionDTOView(dto), nil
+}
+
+func (s *Service) GetContent(ctx context.Context, input GetInput) (io.ReadCloser, string, error) {
+	return s.queries.GetVersionContent(ctx, GetVersionContentQuery{ID: input.ID}, input.Actor.UserID)
 }
 func (s *Service) ListByDocument(ctx context.Context, input ListByDocumentInput) ([]VersionView, error) {
 	dtos, err := s.queries.ListVersionsByDocument(ctx, ListVersionsByDocumentQuery{DocumentID: input.DocumentID}, input.Actor.UserID)

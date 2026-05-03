@@ -13,6 +13,8 @@ type VersionResponse struct {
 	Status       string         `json:"status"`
 	ContentS3Key string         `json:"content_s3_key"`
 	ContentHash  string         `json:"content_hash"`
+	Content      string         `json:"content,omitempty"`      // Base64 encoded content (only if include_content=true)
+	ContentType  string         `json:"content_type,omitempty"` // MIME type (only if include_content=true)
 	Metadata     map[string]any `json:"metadata"`
 	CreatedBy    string         `json:"created_by"`
 	CreatedAt    time.Time      `json:"created_at"`

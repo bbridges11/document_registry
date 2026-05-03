@@ -10,8 +10,9 @@ import (
 
 type Actor struct {
 	UserID string
-	Role   string // User role for authorization
+	Role   string // User role for authorization (e.g., "admin", "contributor", "viewer")
 }
+
 type CreateInput struct {
 	Actor      Actor
 	DocumentID uuid.UUID
@@ -27,8 +28,9 @@ type UpdateInput struct {
 }
 
 type GetInput struct {
-	Actor Actor
-	ID    uuid.UUID
+	Actor          Actor
+	ID             uuid.UUID
+	IncludeContent bool // If true, include base64-encoded content in response
 }
 type ListByDocumentInput struct {
 	Actor      Actor
@@ -73,6 +75,8 @@ type VersionView struct {
 	Status      string
 	ContentKey  string
 	ContentHash string
+	Content     string // Base64-encoded content (only if IncludeContent=true)
+	ContentType string // MIME type (only if IncludeContent=true)
 	Metadata    map[string]any
 	CreatedBy   string
 	CreatedAt   time.Time
@@ -149,6 +153,7 @@ type ValidationIssue struct {
 type UseCase interface {
 	Create(ctx context.Context, input CreateInput) (CreateOutput, error)
 	Get(ctx context.Context, input GetInput) (VersionView, error)
+	GetContent(ctx context.Context, input GetInput) (io.ReadCloser, string, error) // Returns content stream, content-type, error
 	ListByDocument(ctx context.Context, input ListByDocumentInput) ([]VersionView, error)
 	Update(ctx context.Context, input UpdateInput) error
 	Submit(ctx context.Context, input SubmitInput) error
